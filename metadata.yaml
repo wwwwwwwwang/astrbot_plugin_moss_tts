@@ -5,6 +5,8 @@ desc: 基于 MOSS-TTS-Nano（100M，ONNX CPU）的本地声音克隆插件。上
 short_desc: 本地 CPU 声音克隆，后台可配置参数与参考音频
 version: 1.0.0
 category: 语音
+repo: https://github.com/wwwwwwwang/astrbot_plugin_moss_tts
+license: MIT
 tags:
   - TTS
   - 声音克隆

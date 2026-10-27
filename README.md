@@ -1,5 +1,10 @@
 # 妖妖克隆音色（MOSS-TTS-Nano）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.0-blue.svg)](https://astrbot.app)
+[![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-3776AB.svg)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/CPU-only-lightgrey.svg)](#性能参考)
+
 基于 [MOSS-TTS-Nano](https://github.com/OpenMOSS/MOSS-TTS-Nano)（100M 参数，ONNX CPU 推理）的本地声音克隆插件。
 上传一段参考音频，即可用那个音色合成任意文本；全流程本地推理，不依赖云端 TTS。
 
@@ -10,6 +15,25 @@
 - **后台面板**：环境检测、依赖检测、参考音频上传、参数调整、在线试听
 - **指令调试**：聊天里也能试听和切音色
 - **分句合成**：长文本自动拆句再拼接，规避自回归模型尾部跑偏
+
+## 安装
+
+插件市场搜索「妖妖克隆音色」安装，或手动：
+
+```bash
+cd AstrBot/data/plugins
+git clone https://github.com/wwwwwwwang/astrbot_plugin_moss_tts.git
+```
+
+然后在 AstrBot 后台 → 插件 → 找到本插件 → 安装依赖 → 重载插件。
+
+首次合成会自动下载模型（约 730MB）。国内网络先设镜像：
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+模型下载失败或想离线部署，见下方 [模型](#模型) 一节的必需文件清单。
 
 ## 面板
 
@@ -122,6 +146,26 @@ models/MOSS-Audio-Tokenizer-Nano-ONNX/
 - **音色不像原声**：优先换更干净、更长的参考音频（10 秒以上、无 BGM、无他人说话），其次降低 temperature。
 - **首次合成慢**：包含模型加载，约多等 5~10 秒，之后会复用实例。
 
+## 项目结构
+
+```
+astrbot_plugin_moss_tts/
+├── main.py                 # 插件入口、指令注册
+├── moss_engine.py          # 模型加载与合成封装
+├── panel_api.py            # 后台面板接口
+├── pages/                  # 面板前端
+├── _conf_schema.json       # 插件配置项定义
+├── metadata.yaml           # 插件市场元信息
+├── requirements.txt
+├── CHANGELOG.md
+└── voices/                 # 参考音频（不入库）
+```
+
 ## 声明
 
 声音克隆仅限**本人音色**或**已获授权**的音色。把他人声音用于冒充、诈骗、伪造发言等用途，可能违反《民法典》声音权条款及相关法律法规，后果自负。
+
+## 许可
+
+[MIT License](LICENSE) © 2026 wwwwwwwwang
+
