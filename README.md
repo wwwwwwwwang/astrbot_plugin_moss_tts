@@ -143,10 +143,10 @@ export HF_ENDPOINT=https://hf-mirror.com
 | 键 | 说明 | 默认 |
 | --- | --- | --- |
 | `ref_audio` | 当前参考音频 | 空 |
-| `audio_temperature` / `audio_top_p` | 同插件配置 | 0.7 / 0.95 |
+| `audio_temperature` / `audio_top_p` | 同插件配置 | 0.8 / 0.95 |
 | `max_new_frames` | 单次生成帧上限 | 375 |
 | `split_long_text` | 长句分句合成 | false |
-| `auto_release` | 空闲后自动释放模型 | false |
+| `auto_release` | 空闲后自动释放模型 | true |
 | `auto_voice` / `auto_voice_prob` / `auto_voice_max_chars` | 自动语音开关、概率、字数上限 | false / 0.3 / 60 |
 | `tmp_keep_hours` / `tmp_max_files` | 临时音频保留时长与数量上限 | 24 / 60 |
 | `voice_names` | 音色别名映射 | 空 |
