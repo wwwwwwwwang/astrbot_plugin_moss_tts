@@ -1,0 +1,39 @@
+name: Bug 报告
+description: 合成失败、面板报错、依赖装不上这类问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看 README 的「常见问题」，并在面板里跑一遍「环境检测 / 依赖检测」。日志请贴文本。
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: AstrBot 版本 / Python 版本 / 操作系统 / CPU 内存
+      placeholder: AstrBot 4.1.2 · Python 3.11 · Ubuntu 22.04 · 4 核 8G
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象与复现步骤
+      placeholder: |
+        1. 发送 /声音 试听 你好
+        2. 等待 20 秒
+        3. 报错 ...
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: 日志
+      render: text
+  - type: checkboxes
+    id: deps
+    attributes:
+      label: 自查
+      options:
+        - label: 已安装依赖并重载插件
+        - label: 模型已完整下载（缺 .data 文件会加载失败）
+        - label: 参考音频为 8~15 秒单人无 BGM

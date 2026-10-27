@@ -1,0 +1,19 @@
+name: 功能建议
+description: 想要的新能力或改进
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 想解决什么
+      description: 说场景比说方案有用
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你的设想（可选）
+  - type: textarea
+    id: alt
+    attributes:
+      label: 试过的替代方案（可选）

@@ -28,11 +28,5 @@
     "type": "string",
     "hint": "留空使用内置默认路径",
     "default": ""
-  },
-  "auto_voice_reply": {
-    "description": "自动语音回复",
-    "type": "bool",
-    "hint": "开启后普通聊天也会转成语音（较慢，谨慎开启）",
-    "default": false
   }
 }

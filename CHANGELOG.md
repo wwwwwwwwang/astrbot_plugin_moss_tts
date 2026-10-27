@@ -2,6 +2,18 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 文档
+
+- README 新增「环境要求」一节：AstrBot / Python 版本、系统、CPU、内存、磁盘、网络，以及必需与可选依赖
+- README 补充目录、常见问题、参与开发、致谢，指令与面板参数表按实际实现更正（`/声音 自动`、`/声音 概率`）
+- 新增 `CONTRIBUTING.md` 与 Issue / PR 模板
+
+### 移除
+
+- 插件配置项中未生效的 `auto_voice_reply`（自动语音统一由面板参数控制）
+
 ## [1.0.0] - 2026-10-27
 
 ### 新增
