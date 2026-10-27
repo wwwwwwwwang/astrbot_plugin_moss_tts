@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        run: pip install "ruff>=0.5"
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Byte-compile all sources
+        run: python -m compileall -q main.py moss_engine.py panel_api.py tmp_cleaner.py scripts
+
+      - name: Validate metadata + panel template
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path(".")
+          yaml_text = (root / "metadata.yaml").read_text(encoding="utf-8")
+          for key in ("name:", "desc:", "version:", "author:", "repo:"):
+              assert key in yaml_text, f"metadata.yaml 缺少 {key}"
+          json.loads((root / "_conf_schema.json").read_text(encoding="utf-8"))
+          html = (root / "pages" / "panel" / "index.html").read_text(encoding="utf-8")
+          assert "{{" not in html and "{%" not in html, "面板模板仍有未渲染的 Jinja 标记"
+          print("metadata / schema / panel ok")
+          PY

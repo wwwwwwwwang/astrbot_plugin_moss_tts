@@ -9,10 +9,10 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import time
-import uuid
 from pathlib import Path
 
 from astrbot.api import logger
@@ -46,6 +46,8 @@ DEFAULT_STATE = {
     # tmp 清理：超过小时数的删掉，剩下的只留最新 max_files 个
     "tmp_keep_hours": 24,
     "tmp_max_files": 60,
+    # 音色自定义名字：{文件名: 显示名}
+    "voice_names": {},
 }
 
 
@@ -61,6 +63,17 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), "utf-8")
+
+
+def voice_aliases(state: dict | None = None) -> dict:
+    raw = (state if state is not None else load_state()).get("voice_names") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def voice_alias(name: str, state: dict | None = None) -> str:
+    """自定义音色名；没设过就退回文件名（去扩展名）。"""
+    alias = str(voice_aliases(state).get(name) or "").strip()
+    return alias or Path(name).stem
 
 
 def _mem_total_gb() -> float | None:
@@ -173,6 +186,7 @@ class PanelAPI:
             ("/panel/voices", "handle_voices", ["GET"]),
             ("/panel/upload", "handle_upload", ["POST"]),
             ("/panel/voices/delete", "handle_delete_voice", ["POST"]),
+            ("/panel/voices/rename", "handle_voice_rename", ["POST"]),
             ("/panel/config", "handle_config", ["POST"]),
             ("/panel/preview", "handle_preview", ["POST"]),
             ("/panel/audio", "handle_audio", ["GET"]),
@@ -245,6 +259,7 @@ class PanelAPI:
             "disk_free_gb": round(disk.free / 1024**3, 1),
             "gpu": os.path.exists("/dev/nvidia0"),
         }
+        ref_name = os.path.basename(ref) if ref else ""
         return jsonify({
             "success": True,
             "env": env,
@@ -252,23 +267,34 @@ class PanelAPI:
             "model": self._model_status(),
             "config": {
                 "ref_audio": ref,
+                "ref_name": ref_name,
+                "ref_alias": voice_alias(ref_name, state) if ref_name else "",
                 "ref_exists": os.path.exists(ref) if ref else False,
                 "audio_temperature": state.get("audio_temperature", 0.8),
                 "audio_top_p": state.get("audio_top_p", 0.95),
                 "max_new_frames": state.get("max_new_frames", 375),
                 "split_long_text": bool(state.get("split_long_text", False)),
                 "auto_release": bool(state.get("auto_release", True)),
+                "auto_voice": bool(state.get("auto_voice", False)),
+                "auto_voice_prob": float(state.get("auto_voice_prob", 0.3)),
+                "auto_voice_max_chars": int(state.get("auto_voice_max_chars", 60)),
+                "tmp_keep_hours": int(state.get("tmp_keep_hours", 24)),
+                "tmp_max_files": int(state.get("tmp_max_files", 60)),
             },
             "voices_dir": str(VOICE_DIR),
         })
 
     async def handle_voices(self):
         items = []
+        aliases = voice_aliases()
         for p in sorted(VOICE_DIR.glob("*")):
             if p.suffix.lower() in (".wav", ".mp3", ".flac", ".m4a", ".ogg"):
                 st = p.stat()
+                alias = str(aliases.get(p.name) or "").strip()
                 items.append({
                     "name": p.name,
+                    "alias": alias,
+                    "label": alias or p.stem,
                     "path": str(p),
                     "size_kb": round(st.st_size / 1024, 1),
                     "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
@@ -317,9 +343,49 @@ class PanelAPI:
             target.unlink(missing_ok=True)
 
         state = load_state()
-        state["ref_audio"] = str(final)
+        # 只入库，不自动切换：切换由用户在面板手动点
+        # 用上传时的原始文件名当默认音色名，省得一堆 ref_17xxxx
+        alias = " ".join(Path(raw_name).stem.split())[:24]
+        if alias and not re.fullmatch(r"ref_\d+", alias):
+            names = dict(voice_aliases(state))
+            names.setdefault(final.name, alias)
+            state["voice_names"] = names
+            save_state(state)
+        self.plugin.reload_state()
+        return jsonify({"success": True, "path": str(final), "name": final.name,
+                        "alias": voice_aliases(state).get(final.name, ""),
+                        "activated": False})
+
+    async def handle_voice_rename(self):
+        """给音色起个名字（只改显示名，不动音频文件）。传空字符串 = 恢复文件名。"""
+        payload = await request.get_json(force=True, silent=True) or {}
+        raw = str(payload.get("name") or "").strip()
+        if not raw:
+            return jsonify({"success": False, "error": "没有指定音色"}), 400
+        suffix = Path(raw).suffix.lower()
+        if suffix not in (".wav", ".mp3", ".flac", ".m4a", ".ogg"):
+            return jsonify({"success": False, "error": f"不支持的格式: {suffix}"}), 400
+        target = (VOICE_DIR / os.path.basename(raw)).resolve()
+        try:
+            target.relative_to(VOICE_DIR.resolve())
+        except ValueError:
+            return jsonify({"success": False, "error": "路径不合法"}), 400
+        if not target.exists():
+            return jsonify({"success": False, "error": "音色文件不存在"}), 404
+
+        alias = " ".join(str(payload.get("alias") or "").split())[:24]
+        state = load_state()
+        names = dict(voice_aliases(state))
+        if alias:
+            names[target.name] = alias
+        else:
+            names.pop(target.name, None)
+        state["voice_names"] = names
         save_state(state)
-        return jsonify({"success": True, "path": str(final), "name": final.name})
+        self.plugin.reload_state()
+        logger.info(f"[moss-tts] 音色改名: {target.name} -> {alias or '(文件名)'}")
+        return jsonify({"success": True, "name": target.name, "alias": alias,
+                        "label": alias or target.stem})
 
     async def handle_delete_voice(self):
         """删除 voices 目录下的某个参考音频；若是当前正在用的，顺手清空引用。"""
@@ -342,12 +408,16 @@ class PanelAPI:
 
         # 被删的正好是当前参考音 -> 清空，避免状态指向幽灵文件
         state = load_state()
+        names = dict(voice_aliases(state))
+        if names.pop(target.name, None) is not None:
+            state["voice_names"] = names
         cleared = False
         cur = str(state.get("ref_audio") or "")
         if cur and os.path.realpath(cur) == str(target):
             state["ref_audio"] = ""
-            save_state(state)
             cleared = True
+        save_state(state)
+        self.plugin.reload_state()
         return jsonify({"success": True, "name": target.name, "cleared_ref": cleared})
 
     async def handle_config(self):
@@ -454,7 +524,6 @@ class PanelAPI:
 
     async def handle_audio_data(self):
         """返回 base64 data URL，供插件页面 iframe 内直接播放。"""
-        import base64 as _b64
 
         name = (request.args.get("f") or "").strip()
         if not name:

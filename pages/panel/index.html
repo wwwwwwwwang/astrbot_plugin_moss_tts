@@ -47,6 +47,8 @@
               border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px}
   .voice-item.active{border-color:var(--accent);background:rgba(59,110,246,.06)}
   audio{width:100%;margin-top:10px}
+  .rename-input{border:1px solid var(--accent);border-radius:8px;padding:5px 8px;font-size:13px;
+                background:var(--bg,#fff);color:inherit;min-width:120px}
   .pill{font-size:11px;padding:1px 7px;border-radius:20px;border:1px solid var(--line);color:var(--ink3)}
   .err{color:var(--bad);font-size:13px;margin-top:8px;white-space:pre-wrap}
   .loading{color:var(--ink3);font-size:13px}
@@ -77,12 +79,12 @@
   </div>
 
   <div class="card">
-    <h2>参考音频</h2>
+    <h2>音色库</h2>
     <div class="row" style="margin-bottom:10px">
       <input type="file" id="upload" accept=".wav,.mp3,.flac,.m4a,.ogg" style="flex:1;min-width:200px">
-      <button class="primary" id="btn-upload">上传并设为参考</button>
+      <button class="primary" id="btn-upload">上传音色</button>
     </div>
-    <div class="hint" style="margin-bottom:10px">建议 8~15 秒、单人、无背景音乐；上传后自动转 48kHz 单声道 wav。</div>
+    <div class="hint" style="margin-bottom:10px">建议 8~15 秒、单人、无背景音乐；上传后自动转 48kHz 单声道 wav，默认用文件名当音色名。上传只是入库，点「切换音色」才生效；「改名」只改显示名。</div>
     <div id="voices"><span class="loading">读取中…</span></div>
   </div>
 
@@ -271,7 +273,9 @@
     $('voicemax').value = c.auto_voice_max_chars ?? 60;
     $('tmphours').value = c.tmp_keep_hours ?? 24;
     $('tmpfiles').value = c.tmp_max_files ?? 60;
-    $('preview-info').textContent = c.ref_audio ? (c.ref_exists ? '参考音就绪' : '参考音缺失') : '';
+    $('preview-info').textContent = c.ref_audio
+      ? (c.ref_exists ? '当前音色：' + (c.ref_alias || c.ref_name) : '当前音色文件缺失')
+      : '还没选音色';
 
     loadVoices(c.ref_audio || '');
   }
@@ -289,12 +293,15 @@
     }
     $('voices').innerHTML = items.map(v => {
       const active = current && current.endsWith(v.name);
-      return `<div class="voice-item ${active ? 'active' : ''}">
-        <div><div>${esc(v.name)} ${active ? '<span class="pill">当前</span>' : ''}</div>
-        <div style="color:var(--ink3);font-size:12px">${v.size_kb} KB · ${esc(v.mtime)}</div></div>
+      return `<div class="voice-item ${active ? 'active' : ''}" data-file="${esc(v.name)}">
+        <div><div>${esc(v.label || v.name)} ${active ? '<span class="pill">当前</span>' : ''}</div>
+        <div style="color:var(--ink3);font-size:12px">${esc(v.name)} · ${v.size_kb} KB · ${esc(v.mtime)}</div></div>
         <div class="row">
           <button data-play="${esc(v.name)}">试听</button>
-          <button data-use="${esc(v.path)}">设为参考</button>
+          ${active
+            ? '<button disabled title="正在使用这条音色">当前音色</button>'
+            : `<button data-use="${esc(v.path)}">切换音色</button>`}
+          <button data-rename="${esc(v.name)}" data-alias="${esc(v.alias || '')}">改名</button>
           <button class="danger" data-del="${esc(v.name)}">删除</button>
         </div></div>`;
     }).join('');
@@ -319,8 +326,28 @@
     $('voices').querySelectorAll('[data-use]').forEach(b => {
       b.onclick = async () => {
         const r = await apiPost('panel/config', { ref_audio: b.dataset.use });
-        if (r && r.success) { toast('已切换参考音频'); loadStatus(); }
+        if (r && r.success) { toast('已切换音色'); loadStatus(); }
         else toast((r && r.error) || '切换失败');
+      };
+    });
+
+    $('voices').querySelectorAll('[data-rename]').forEach(b => {
+      b.onclick = () => {
+        const item = b.closest('.voice-item');
+        const name = b.dataset.rename;
+        const cur = b.dataset.alias || '';
+        item.querySelector('.row').innerHTML =
+          `<input class="rename-input" maxlength="24" placeholder="${esc(name)}" value="${esc(cur)}">
+           <button data-save>保存</button><button data-cancel>取消</button>`;
+        const input = item.querySelector('.rename-input');
+        input.focus();
+        item.querySelector('[data-cancel]').onclick = () => loadStatus();
+        item.querySelector('[data-save]').onclick = async () => {
+          const r = await apiPost('panel/voices/rename', { name, alias: input.value.trim() });
+          if (r && r.success) { toast(input.value.trim() ? '音色名已保存' : '已改回文件名'); loadStatus(); }
+          else toast((r && r.error) || '改名失败');
+        };
+        input.onkeydown = (e) => { if (e.key === 'Enter') item.querySelector('[data-save]').click(); };
       };
     });
 
@@ -369,12 +396,15 @@
     try {
       const b64 = await fileToBase64(f);
       const r = await apiPost('panel/upload', { name: f.name, base64: b64 });
-      if (r && r.success) { toast('上传完成，已设为参考音'); await loadStatus(); }
-      else toast((r && r.error) || '上传失败');
+      if (r && r.success) {
+        toast('上传完成，点「切换音色」才用它');
+        $('upload').value = '';
+        await loadStatus();
+      } else toast((r && r.error) || '上传失败');
     } catch (e) {
       toast('上传出错：' + (e && e.message || e));
     }
-    btn.disabled = false; btn.textContent = '上传并设为参考';
+    btn.disabled = false; btn.textContent = '上传音色';
   };
 
   $('btn-save').onclick = async () => {
@@ -426,7 +456,15 @@
     $('preview-err').textContent = '';
     $('preview-info').textContent = '合成中…';
     try {
-      const r = await apiPost('panel/preview', { text });
+      let r;
+      try {
+        r = await apiPost('panel/preview', { text });
+      } catch (err1) {
+        // 连接被掐/超时（内存吃紧时云上常这样）：等一下，自动再来一次
+        $('preview-info').textContent = '连接断了，重试中…';
+        await new Promise((res) => setTimeout(res, 1200));
+        r = await apiPost('panel/preview', { text });
+      }
       if (r && r.success) {
         const p = $('player');
         p.src = r.audio;

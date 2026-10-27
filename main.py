@@ -13,6 +13,7 @@ import asyncio
 import os
 import random
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -23,7 +24,7 @@ from astrbot.api.message_components import Plain, Record
 from astrbot.api.star import Context, Star, register
 
 from .moss_engine import DEFAULT_MODEL_DIR, MossEngine
-from .panel_api import PanelAPI, load_state, safe_ref_audio
+from .panel_api import PanelAPI, load_state, safe_ref_audio, voice_alias
 from .tmp_cleaner import cleanup_tmp
 
 PLUGIN_DIR = Path(__file__).parent
@@ -69,6 +70,27 @@ class MossTTSPlugin(Star):
         self.panel = PanelAPI(self)
         self.panel.register(context)
         self._maybe_cleanup_tmp(force=True)
+        self._warm_model_async()
+
+    def _warm_model_async(self) -> None:
+        """常驻模式下开机预热一次模型。
+
+        不预热的话第一次试听要额外等 5s 加载；反复加载/释放还会把内存顶到
+        OOM，云上表现就是试听卡死、连接被掐。
+        """
+        if self._state.get("auto_release", True):
+            return
+
+        def _run() -> None:
+            time.sleep(25)
+            try:
+                t0 = time.time()
+                MossEngine.get(self.config.get("model_dir") or DEFAULT_MODEL_DIR).ensure_loaded()
+                logger.info(f"[moss-tts] 模型预热完成，耗时 {time.time() - t0:.1f}s")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[moss-tts] 预热失败: {e}")
+
+        threading.Thread(target=_run, name="moss-warmup", daemon=True).start()
 
     # ---------- 状态 ----------
     def reload_state(self) -> None:
@@ -173,7 +195,14 @@ class MossTTSPlugin(Star):
             chunks = []
             for part in parts:
                 path = await self._synth(part)
-                data, sr = sf.read(path, always_2d=True)
+                try:
+                    data, sr = sf.read(path, always_2d=True)
+                finally:
+                    # 分句中间产物只用于拼接，读完即删，避免 tmp 里堆一堆碎片
+                    try:
+                        Path(path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
                 chunks.append((data, sr))
             if not chunks:
                 return await self._synth(text)
@@ -243,15 +272,19 @@ class MossTTSPlugin(Star):
 
         if sub in ("", "信息", "info"):
             exists = os.path.exists(self.ref_audio)
+            alias = voice_alias(os.path.basename(self.ref_audio), self._state) if self.ref_audio else "未设置"
             yield event.plain_result(
                 "音色状态\n"
-                f"参考音频：{self.ref_audio}\n"
+                f"当前音色：{alias}\n"
+                f"音频文件：{self.ref_audio}\n"
                 f"文件存在：{'是' if exists else '否'}\n"
                 f"温度：{self.temperature}　top_p：{self.top_p}　帧上限：{self.max_frames}\n"
                 f"模型目录：{self.config.get('model_dir') or '默认'}\n"
                 f"自动语音：{'开' if self._state.get('auto_voice') else '关'}"
-                f"（概率 {self._state.get('auto_voice_prob')}，上限 {self._state.get('auto_voice_max_chars')} 字）\n"
-                "用法：/声音 试听 文本 ｜ /声音 设置 <路径> ｜ /声音 参数 0.7 0.9 ｜ /声音 自动 开 ｜ /声音 重载"
+                f"（概率 {self._state.get('auto_voice_prob')}，"
+                f"上限 {self._state.get('auto_voice_max_chars')} 字）\n"
+                "用法：/声音 试听 文本 ｜ /声音 设置 <路径> ｜ /声音 参数 0.7 0.9 ｜ "
+                "/声音 自动 开 ｜ /声音 重载"
             )
             return
 
@@ -335,8 +368,11 @@ class MossTTSPlugin(Star):
             return
 
         if sub == "重载":
+            self.reload_state()
             MossEngine.reset()
-            yield event.plain_result("模型实例已释放，下次合成会重新加载（内存会先降下来）。")
+            yield event.plain_result(
+                "面板配置已重新读取，模型实例已释放，下次合成会重新加载（内存会先降下来）。"
+            )
             return
 
         yield event.plain_result("看不懂这个子命令，发 /声音 看用法。")

@@ -1,9 +1,9 @@
 name: astrbot_plugin_moss_tts
 display_name: 妖妖克隆音色（MOSS-TTS-Nano）
 author: 妖妖
-desc: 基于 MOSS-TTS-Nano（100M，ONNX CPU）的本地声音克隆插件。上传或指定一段参考音频即可克隆音色，支持后台调整温度、top_p、帧上限，指令内可试听调试。
-short_desc: 本地 CPU 声音克隆，后台可配置参数与参考音频
-version: 1.0.0
+desc: 基于 MOSS-TTS-Nano（100M，ONNX CPU）的本地声音克隆插件。上传参考音频即可克隆音色，内置网页音色面板（环境/依赖检测、音色库、参数、试听），支持自动语音、长文本切分、tmp 自动清理。
+short_desc: 本地 CPU 声音克隆 + 网页音色面板（上传音色/参数/试听）
+version: 1.1.0
 category: 语音
 repo: https://github.com/wwwwwwwang/astrbot_plugin_moss_tts
 license: MIT
@@ -23,7 +23,11 @@ help: |
     /声音 参数 0.7 0.9  临时改温度 / top_p
     /声音 重载          清空已加载的模型实例
 
-  后台可配置：参考音频路径、温度、top_p、帧上限、模型目录。
+  /声音 自动 开|关|概率|上限   自动语音（回复附带语音/随机概率/字数上限）
+    /声音 释放          释放模型实例，回收内存
+    /声音 清理          清空 tmp 缓存
+
+  插件页面「音色面板」可上传/试听/切换音色、在线调参、看环境依赖。
 
 pages:
   - name: panel

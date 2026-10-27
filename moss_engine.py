@@ -22,8 +22,8 @@ _AUDIO_BACKEND: str | None = None
 def _native_audio_ok() -> bool:
     """真 torchcodec + torchaudio 能不能正常解码。"""
     try:
-        from torchcodec.decoders import AudioDecoder  # noqa: F401,PLC0415
         import torchaudio  # noqa: PLC0415
+        from torchcodec.decoders import AudioDecoder  # noqa: F401,PLC0415
 
         return callable(torchaudio.load)
     except Exception:  # noqa: BLE001
@@ -65,13 +65,15 @@ def _patch_torchcodec() -> str:
 class MossEngine:
     """单例推理引擎。"""
 
-    _instance: "MossEngine | None" = None
+    _instance: MossEngine | None = None
     _lock = threading.Lock()
 
     def __init__(self, model_dir: str = DEFAULT_MODEL_DIR) -> None:
         self.model_dir = model_dir
         self._rt: Any = None
         self._init_lock = threading.Lock()
+        self._ref_lock = threading.Lock()
+        self._ref_cache: dict[tuple, list[list[int]]] = {}
         self.load_seconds: float = 0.0
 
     @classmethod
@@ -93,7 +95,7 @@ class MossEngine:
         return holder
 
     @classmethod
-    def get(cls, model_dir: str = DEFAULT_MODEL_DIR) -> "MossEngine":
+    def get(cls, model_dir: str = DEFAULT_MODEL_DIR) -> MossEngine:
         with cls._lock:
             holder = cls._holder()
             inst = getattr(holder, "instance", None)
@@ -129,6 +131,8 @@ class MossEngine:
     def close(self) -> None:
         """丢弃已加载的 runtime（模型权重随 GC 释放）。"""
         self._rt = None
+        with self._ref_lock:
+            self._ref_cache.clear()
 
     def ensure_loaded(self) -> Any:
         with self._init_lock:
@@ -142,7 +146,31 @@ class MossEngine:
             t0 = time.time()
             self._rt = OnnxTtsRuntime(model_dir=self.model_dir)
             self.load_seconds = time.time() - t0
+            # synth(prompt_audio_path=...) 内部会调 encode_reference_audio，
+            # 包一层让每次合成都走缓存，别重复编码参考音频。
+            raw_encode = self._rt.encode_reference_audio
+            self._rt.encode_reference_audio = lambda p: self._encode_cached(raw_encode, p)
             return self._rt
+
+    def _encode_cached(self, raw_encode, wav_path: str) -> list[list[int]]:
+        """参考音频编码缓存（按路径 + mtime + 大小）。编码一次约 1.5s。"""
+        try:
+            st = os.stat(wav_path)
+            key: tuple | None = (os.path.abspath(wav_path), st.st_mtime_ns, st.st_size)
+        except OSError:
+            key = None
+        if key is not None:
+            with self._ref_lock:
+                cached = self._ref_cache.get(key)
+            if cached is not None:
+                return cached
+        codes = raw_encode(wav_path)
+        if key is not None:
+            with self._ref_lock:
+                # 只留最后一段参考音频，够用又不占内存
+                self._ref_cache.clear()
+                self._ref_cache[key] = codes
+        return codes
 
     def encode_reference(self, wav_path: str) -> list[list[int]]:
         rt = self.ensure_loaded()
