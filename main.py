@@ -24,7 +24,7 @@ from astrbot.api.star import Context, Star, register
 
 from .moss_engine import DEFAULT_MODEL_DIR, MossEngine
 from .panel_api import PanelAPI, load_state, safe_ref_audio
-from .tmp_clean import cleanup_tmp
+from .tmp_cleaner import cleanup_tmp
 
 PLUGIN_DIR = Path(__file__).parent
 VOICE_DIR = PLUGIN_DIR / "voices"

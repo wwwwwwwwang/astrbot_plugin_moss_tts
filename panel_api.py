@@ -501,7 +501,7 @@ class PanelAPI:
 
     async def handle_clean_tmp(self):
         """手动清一次 tmp 缓存音频。"""
-        from .tmp_clean import cleanup_tmp
+        from .tmp_cleaner import cleanup_tmp
 
         state = load_state()
         removed = cleanup_tmp(
