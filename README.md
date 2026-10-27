@@ -55,14 +55,45 @@ ffmpeg       # 系统包，用于转码与格式统一
 
 ## 模型
 
-默认目录 `/tmp/moss-tts`，首次合成时自动从 HuggingFace 拉取（约 300MB）：
+默认目录 `/tmp/moss-tts`，首次合成时自动从 HuggingFace 拉取（完整约 730MB）：
 
 ```
-models/MOSS-TTS-Nano-100M-ONNX
-models/MOSS-Audio-Tokenizer-Nano-ONNX
+models/MOSS-TTS-Nano-100M-ONNX/
+models/MOSS-Audio-Tokenizer-Nano-ONNX/
 ```
 
 国内网络可设置环境变量 `HF_ENDPOINT=https://hf-mirror.com`。也可在插件配置里指定已有的模型目录。
+
+### 手动部署：目录里到底要哪些文件
+
+只拷 `.onnx` 跑不起来——权重是外置的，必带同目录的 `.data`，还差 tokenizer。
+
+`models/MOSS-TTS-Nano-100M-ONNX/`
+
+| 文件 | 大小 |
+| --- | --- |
+| `moss_tts_prefill.onnx` | 277K |
+| `moss_tts_decode_step.onnx` | 285K |
+| `moss_tts_local_decoder.onnx` | 48K |
+| `moss_tts_local_cached_step.onnx` | 52K |
+| `moss_tts_local_fixed_sampled_frame.onnx` | 460K |
+| `moss_tts_local_shared.data` | 219M |
+| `moss_tts_global_shared.data` | 420M |
+| `tokenizer.model` | 460K |
+| `tts_browser_onnx_meta.json` | 4K |
+
+`models/MOSS-Audio-Tokenizer-Nano-ONNX/`
+
+| 文件 | 大小 |
+| --- | --- |
+| `moss_audio_tokenizer_encode.onnx` | 797K |
+| `moss_audio_tokenizer_decode_step.onnx` | 343K |
+| `moss_audio_tokenizer_decode_full.onnx` | 666K |
+| `moss_audio_tokenizer_encode.data` | 42M |
+| `moss_audio_tokenizer_decode_shared.data` | 42M |
+| `codec_browser_onnx_meta.json` | 17K |
+
+一共 8 个 onnx + 4 个 data + 1 个 tokenizer + 2 个 meta。`.cache/huggingface/` 缓存目录可以删。
 
 ## 配置项
 
