@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>音色面板 · 妖妖克隆音色</title>
+<style>
+  :root{
+    --bg:transparent; --card:#fff; --ink:#1f2329; --ink2:#646a73; --ink3:#8f959e;
+    --line:#e5e6eb; --ok:#00b42a; --bad:#f53f3f; --warn:#ff7d00; --accent:#3b6ef6;
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --card:#1f2022; --ink:#e8e9ea; --ink2:#a6a9ad; --ink3:#75787c;
+           --line:#2e2f31; --accent:#5b86ff; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px;background:var(--bg);color:var(--ink);
+       font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;display:grid;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  h2{margin:0 0 12px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+  h2 .tag{font-size:11px;font-weight:400;color:var(--ink3);border:1px solid var(--line);padding:1px 6px;border-radius:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+  .kv{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .kv dt{font-size:12px;color:var(--ink3);margin:0}
+  .kv dd{margin:2px 0 0;font-size:15px;font-weight:600;word-break:break-all}
+  .dep{display:flex;justify-content:space-between;align-items:center;gap:8px;
+       border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;flex:none}
+  .ok{background:var(--ok)} .bad{background:var(--bad)} .warn{background:var(--warn)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{border:1px solid var(--line);background:var(--card);color:var(--ink);
+         padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.danger{color:var(--bad);border-color:rgba(220,60,60,.35)}
+  button.danger.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+  input[type=text],input[type=number],textarea,select{
+    width:100%;background:var(--card);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font:inherit}
+  textarea{min-height:80px;resize:vertical}
+  label.field{display:block;margin-bottom:10px}
+  label.field>span{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
+  .hint{font-size:12px;color:var(--ink3);margin-top:6px}
+  .voice-item{display:flex;justify-content:space-between;align-items:center;gap:10px;
+              border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px}
+  .voice-item.active{border-color:var(--accent);background:rgba(59,110,246,.06)}
+  audio{width:100%;margin-top:10px}
+  .pill{font-size:11px;padding:1px 7px;border-radius:20px;border:1px solid var(--line);color:var(--ink3)}
+  .err{color:var(--bad);font-size:13px;margin-top:8px;white-space:pre-wrap}
+  .loading{color:var(--ink3);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h2>环境检测 <span class="tag" id="env-tag">加载中…</span></h2>
+    <div class="grid" id="env-grid"><span class="loading">读取中…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>依赖检测 <span class="tag" id="dep-tag"></span></h2>
+    <div class="grid" id="dep-grid"><span class="loading">读取中…</span></div>
+    <div class="hint" id="dep-hint"></div>
+  </div>
+
+  <div class="card">
+    <h2>模型 <span class="tag" id="model-tag"></span></h2>
+    <div class="grid" id="model-grid"><span class="loading">读取中…</span></div>
+    <div class="hint">模型缺失时首次合成会自动下载，国内可用 HF_ENDPOINT=https://hf-mirror.com。</div>
+    <div class="row" style="margin-top:10px">
+      <button id="btn-release">释放模型内存</button>
+      <span class="hint" id="release-info">合成时会重新加载，约 5~10 秒</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>参考音频</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="file" id="upload" accept=".wav,.mp3,.flac,.m4a,.ogg" style="flex:1;min-width:200px">
+      <button class="primary" id="btn-upload">上传并设为参考</button>
+    </div>
+    <div class="hint" style="margin-bottom:10px">建议 8~15 秒、单人、无背景音乐；上传后自动转 48kHz 单声道 wav。</div>
+    <div id="voices"><span class="loading">读取中…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>合成参数</h2>
+    <div class="grid">
+      <label class="field"><span>温度（0.1~1.5，越低越稳）</span>
+        <input type="number" id="temp" step="0.05" min="0.1" max="1.5"></label>
+      <label class="field"><span>top_p（0.1~1.0）</span>
+        <input type="number" id="topp" step="0.01" min="0.1" max="1"></label>
+      <label class="field"><span>帧上限（max_new_frames）</span>
+        <input type="number" id="frames" step="25" min="50" max="2000"></label>
+      <label class="field"><span>长句分句合成</span>
+        <select id="split"><option value="0">关闭（整句直出）</option><option value="1">开启</option></select></label>
+      <label class="field"><span>合成后自动释放内存</span>
+        <select id="autorelease"><option value="0">关闭（常驻，下一条更快）</option><option value="1">开启（内存常低于 2G，每条多等 5~10 秒）</option></select></label>
+      <label class="field"><span>自动语音（文本回复直接发语音）</span>
+        <select id="autovoice"><option value="0">关闭</option><option value="1">开启</option></select></label>
+      <label class="field"><span>语音触发概率（0~1）</span>
+        <input type="number" id="voiceprob" step="0.05" min="0" max="1"></label>
+      <label class="field"><span>语音最长字数（超过保留文本）</span>
+        <input type="number" id="voicemax" step="10" min="1" max="200"></label>
+      <label class="field"><span>tmp 缓存保留小时（0 = 一直留）</span>
+        <input type="number" id="tmphours" step="1" min="0" max="720"></label>
+      <label class="field"><span>tmp 最多保留文件数</span>
+        <input type="number" id="tmpfiles" step="10" min="0" max="5000"></label>
+    </div>
+    <div class="row">
+      <button class="primary" id="btn-save">保存参数</button>
+      <button id="btn-clean-tmp">清理 tmp 缓存</button>
+      <span class="hint" id="clean-info"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>试听 <span class="tag" id="preview-info"></span></h2>
+    <label class="field"><span>要念的文本</span>
+      <textarea id="text">今天天气不错，我下午再过去，你们先忙吧。</textarea></label>
+    <button class="primary" id="btn-preview">生成试听</button>
+    <div class="err" id="preview-err"></div>
+    <audio id="player" controls preload="metadata" style="display:none;width:100%;margin-top:12px"></audio>
+  </div>
+
+</div>
+
+<script>
+(async function () {
+  // AstrBot 的 bridge 脚本会被注入到 body 末尾，位置在本脚本之后，因此必须等它加载完成
+  function waitForBridge(timeout = 5000) {
+    return new Promise(resolve => {
+      if (window.AstrBotPluginPage) return resolve(window.AstrBotPluginPage);
+      const started = Date.now();
+      const timer = setInterval(() => {
+        if (window.AstrBotPluginPage) {
+          clearInterval(timer);
+          resolve(window.AstrBotPluginPage);
+        } else if (Date.now() - started >= timeout) {
+          clearInterval(timer);
+          resolve(null);
+        }
+      }, 50);
+    });
+  }
+
+  const bridge = await waitForBridge();
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  const fmtDur = s => {
+    if (!isFinite(s) || s < 0) return '--:--';
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+
+  // 统一用页面里的 <audio controls> 播放：自带时长、暂停、进度条拖动
+  function playInPlayer(src, label) {
+    const p = $('player');
+    const info = $('preview-info');
+    p.style.display = 'block';
+    p.src = src;
+    info.textContent = label ? `${label} · 加载中…` : '加载中…';
+    p.onloadedmetadata = () => {
+      if (label) info.textContent = `${label} · ${fmtDur(p.duration)}`;
+    };
+    p.onerror = () => { info.textContent = label ? `${label} · 播放失败` : '播放失败'; };
+    try { p.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+    p.play().catch(() => toast('点一下页面再点播放'));
+  }
+
+  function toast(msg, ms = 2000) {
+    let t = document.getElementById('_toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = '_toast';
+      t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;opacity:.95';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.remove(), ms);
+  }
+
+  async function apiGet(path, params) {
+    if (bridge && bridge.apiGet) return bridge.apiGet(path, params);
+    const q = params ? '?' + new URLSearchParams(params).toString() : '';
+    const r = await fetch('/api/plug/astrbot_plugin_moss_tts/' + path + q, { credentials: 'include' });
+    return r.json();
+  }
+
+  async function apiPost(path, body) {
+    if (bridge && bridge.apiPost) return bridge.apiPost(path, body || {});
+    const r = await fetch('/api/plug/astrbot_plugin_moss_tts/' + path, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    return r.json();
+  }
+
+  const fileToBase64 = file => new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',', 2)[1]);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+
+  const kv = (label, value) => `<dl class="kv"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></dl>`;
+
+  async function loadStatus() {
+    $('env-tag').textContent = '读取中…';
+    let d;
+    try {
+      d = await apiGet('panel/status');
+    } catch (e) {
+      $('env-tag').textContent = '加载失败';
+      $('env-grid').innerHTML = `<div class="err">请求失败：${esc(e && e.message || e)}</div>`;
+      return;
+    }
+    if (!d || !d.success) {
+      $('env-tag').textContent = '加载失败';
+      $('env-grid').innerHTML = `<div class="err">${esc(d && d.error || d && d.message || '接口返回异常')}</div>`;
+      return;
+    }
+
+    $('env-tag').textContent = d.env.platform;
+    $('env-grid').innerHTML = [
+      kv('Python', d.env.python),
+      kv('CPU 核心', d.env.cpu_count ?? '—'),
+      kv('内存', (d.env.mem_gb ?? '—') + ' GB'),
+      kv('磁盘可用', d.env.disk_free_gb + ' GB'),
+      kv('GPU', d.env.gpu ? '有' : '无（CPU 推理）'),
+    ].join('');
+
+    const deps = d.deps || {};
+    const names = Object.keys(deps);
+    const bad = names.filter(n => !deps[n].ok && !deps[n].optional);
+    const soft = names.filter(n => !deps[n].ok && deps[n].optional);
+    $('dep-grid').innerHTML = names.map(n => {
+      const v = deps[n];
+      const cls = v.ok ? 'ok' : (v.optional ? 'warn' : 'bad');
+      return `<div class="dep"><span><i class="dot ${cls}"></i>${esc(n)}</span><span style="color:var(--ink3)">${esc(v.detail)}</span></div>`;
+    }).join('');
+    $('dep-tag').textContent = bad.length ? `缺 ${bad.length} 项` : (soft.length ? '齐全（有可忽略项）' : '齐全');
+    $('dep-hint').textContent = bad.length
+      ? '缺少：' + bad.join('、')
+      : (soft.length ? '可忽略：' + soft.join('、') : '依赖齐全，可以直接合成。');
+
+    const m = d.model || {};
+    $('model-tag').textContent = m.ready ? '就绪' : '缺失';
+    $('model-grid').innerHTML = [
+      kv('模型目录', m.dir),
+      kv('ONNX 文件', (m.onnx_files ?? 0) + ' 个'),
+      kv('占用', (m.size_gb ?? 0) + ' GB'),
+      kv('状态', m.ready ? '可推理' : '待下载'),
+    ].join('');
+
+    const c = d.config || {};
+    $('temp').value = c.audio_temperature;
+    $('topp').value = c.audio_top_p;
+    $('frames').value = c.max_new_frames;
+    $('split').value = c.split_long_text ? '1' : '0';
+    $('autorelease').value = c.auto_release ? '1' : '0';
+    $('autovoice').value = c.auto_voice ? '1' : '0';
+    $('voiceprob').value = c.auto_voice_prob ?? 0.3;
+    $('voicemax').value = c.auto_voice_max_chars ?? 60;
+    $('tmphours').value = c.tmp_keep_hours ?? 24;
+    $('tmpfiles').value = c.tmp_max_files ?? 60;
+    $('preview-info').textContent = c.ref_audio ? (c.ref_exists ? '参考音就绪' : '参考音缺失') : '';
+
+    loadVoices(c.ref_audio || '');
+  }
+
+  async function loadVoices(current) {
+    let d;
+    try { d = await apiGet('panel/voices'); } catch (e) {
+      $('voices').innerHTML = `<div class="err">读取音频列表失败：${esc(e && e.message || e)}</div>`;
+      return;
+    }
+    const items = (d && d.items) || [];
+    if (!items.length) {
+      $('voices').innerHTML = '<div class="hint">还没有参考音频，先上传一个。</div>';
+      return;
+    }
+    $('voices').innerHTML = items.map(v => {
+      const active = current && current.endsWith(v.name);
+      return `<div class="voice-item ${active ? 'active' : ''}">
+        <div><div>${esc(v.name)} ${active ? '<span class="pill">当前</span>' : ''}</div>
+        <div style="color:var(--ink3);font-size:12px">${v.size_kb} KB · ${esc(v.mtime)}</div></div>
+        <div class="row">
+          <button data-play="${esc(v.name)}">试听</button>
+          <button data-use="${esc(v.path)}">设为参考</button>
+          <button class="danger" data-del="${esc(v.name)}">删除</button>
+        </div></div>`;
+    }).join('');
+
+    $('voices').querySelectorAll('[data-play]').forEach(b => {
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const r = await apiGet('panel/audio-data', { f: b.dataset.play });
+          // 桥接层会把响应里的 data 字段当信封拆掉，所以这里两种都认
+          const src = typeof r === 'string' ? r : (r && (r.audio || r.data));
+          if (src && src.startsWith('data:audio')) {
+            playInPlayer(src, b.dataset.play);
+          } else {
+            toast((r && r.error) || '读取失败');
+          }
+        } catch (e) { toast('读取失败'); }
+        b.disabled = false;
+      };
+    });
+
+    $('voices').querySelectorAll('[data-use]').forEach(b => {
+      b.onclick = async () => {
+        const r = await apiPost('panel/config', { ref_audio: b.dataset.use });
+        if (r && r.success) { toast('已切换参考音频'); loadStatus(); }
+        else toast((r && r.error) || '切换失败');
+      };
+    });
+
+    $('voices').querySelectorAll('[data-del]').forEach(b => {
+      // iframe 里 confirm() 常被沙箱拦掉，改成点两次确认
+      let armed = false, timer = null;
+      const reset = () => {
+        armed = false;
+        clearTimeout(timer);
+        b.textContent = '删除';
+        b.classList.remove('armed');
+      };
+      b.onclick = async () => {
+        const name = b.dataset.del;
+        if (!armed) {
+          armed = true;
+          b.textContent = '确认删?';
+          b.classList.add('armed');
+          timer = setTimeout(reset, 3000);
+          return;
+        }
+        reset();
+        b.disabled = true;
+        try {
+          const r = await apiPost('panel/voices/delete', { name });
+          if (r && r.success) {
+            toast(r.cleared_ref ? '已删除，参考音频已清空' : '已删除');
+            loadStatus();
+          } else {
+            toast((r && r.error) || '删除失败');
+            b.disabled = false;
+          }
+        } catch (e) {
+          toast('删除失败');
+          b.disabled = false;
+        }
+      };
+    });
+  }
+
+  $('btn-upload').onclick = async () => {
+    const f = $('upload').files[0];
+    if (!f) return toast('先选个文件');
+    const btn = $('btn-upload');
+    btn.disabled = true; btn.textContent = '上传中…';
+    try {
+      const b64 = await fileToBase64(f);
+      const r = await apiPost('panel/upload', { name: f.name, base64: b64 });
+      if (r && r.success) { toast('上传完成，已设为参考音'); await loadStatus(); }
+      else toast((r && r.error) || '上传失败');
+    } catch (e) {
+      toast('上传出错：' + (e && e.message || e));
+    }
+    btn.disabled = false; btn.textContent = '上传并设为参考';
+  };
+
+  $('btn-save').onclick = async () => {
+    const r = await apiPost('panel/config', {
+      audio_temperature: parseFloat($('temp').value),
+      audio_top_p: parseFloat($('topp').value),
+      max_new_frames: parseInt($('frames').value, 10),
+      split_long_text: $('split').value === '1',
+      auto_release: $('autorelease').value === '1',
+      auto_voice: $('autovoice').value === '1',
+      auto_voice_prob: parseFloat($('voiceprob').value),
+      auto_voice_max_chars: parseInt($('voicemax').value, 10),
+      tmp_keep_hours: parseInt($('tmphours').value, 10),
+      tmp_max_files: parseInt($('tmpfiles').value, 10)
+    });
+    if (r && r.success) { toast('参数已保存'); loadStatus(); }
+    else toast((r && r.error) || '保存失败');
+  };
+
+  $('btn-clean-tmp').onclick = async () => {
+    const btn = $('btn-clean-tmp');
+    btn.disabled = true; btn.textContent = '清理中…';
+    try {
+      const r = await apiPost('panel/clean-tmp', {});
+      if (r && r.success) {
+        $('clean-info').textContent = `已删除 ${r.removed} 个缓存音频`;
+        toast('清理完成');
+      } else toast((r && r.error) || '清理失败');
+    } catch (e) { toast('清理失败'); }
+    btn.disabled = false; btn.textContent = '清理 tmp 缓存';
+  };
+
+  $('btn-release').onclick = async () => {
+    const btn = $('btn-release');
+    btn.disabled = true; btn.textContent = '释放中…';
+    try {
+      const r = await apiPost('panel/release', {});
+      if (r && r.success) { $('release-info').textContent = '已释放，下次合成会重新加载'; toast('模型已释放'); }
+      else toast((r && r.error) || '释放失败');
+    } catch (e) { toast('释放失败'); }
+    btn.disabled = false; btn.textContent = '释放模型内存';
+  };
+
+  $('btn-preview').onclick = async () => {
+    const text = $('text').value.trim();
+    if (!text) return toast('写点要念的内容');
+    const btn = $('btn-preview');
+    btn.disabled = true; btn.textContent = '合成中…';
+    $('preview-err').textContent = '';
+    $('preview-info').textContent = '合成中…';
+    try {
+      const r = await apiPost('panel/preview', { text });
+      if (r && r.success) {
+        const p = $('player');
+        p.src = r.audio;
+        p.style.display = 'block';
+        p.play().catch(() => {});
+        $('preview-info').textContent = `${r.duration}s / ${r.sample_rate}Hz / 耗时 ${r.elapsed}s`;
+        p.onloadedmetadata = () => {
+          $('preview-info').textContent = `${fmtDur(p.duration)} · ${r.sample_rate}Hz · 耗时 ${r.elapsed}s`;
+        };
+      } else {
+        $('preview-err').textContent = (r && r.error) || '合成失败';
+        $('preview-info').textContent = '';
+      }
+    } catch (e) {
+      $('preview-err').textContent = String(e && e.message || e);
+      $('preview-info').textContent = '';
+    }
+    btn.disabled = false; btn.textContent = '生成试听';
+  };
+
+  if (!bridge) {
+    console.warn('[moss-tts] 未检测到 AstrBotPluginPage bridge，回退到直接 fetch');
+  }
+  loadStatus();
+})();
+</script>
+</body>
+</html>

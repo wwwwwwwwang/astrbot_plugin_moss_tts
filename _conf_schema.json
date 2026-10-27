@@ -1,0 +1,38 @@
+{
+  "ref_audio": {
+    "description": "参考音频路径",
+    "type": "string",
+    "hint": "克隆音色用的 wav，建议 8-15 秒、单人、无背景音。留空则用插件目录 voices/ref_voice.wav",
+    "default": ""
+  },
+  "audio_temperature": {
+    "description": "采样温度",
+    "type": "float",
+    "hint": "越低越稳定贴近原声，越高越有起伏但容易跑偏。默认 0.8",
+    "default": 0.8
+  },
+  "audio_top_p": {
+    "description": "top_p",
+    "type": "float",
+    "hint": "默认 0.95。想更稳可以降到 0.9",
+    "default": 0.95
+  },
+  "max_new_frames": {
+    "description": "单次生成帧上限",
+    "type": "int",
+    "hint": "默认 375。长句被截断就调大，比如 700",
+    "default": 375
+  },
+  "model_dir": {
+    "description": "模型目录",
+    "type": "string",
+    "hint": "留空使用内置默认路径",
+    "default": ""
+  },
+  "auto_voice_reply": {
+    "description": "自动语音回复",
+    "type": "bool",
+    "hint": "开启后普通聊天也会转成语音（较慢，谨慎开启）",
+    "default": false
+  }
+}

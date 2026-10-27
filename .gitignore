@@ -1,0 +1,28 @@
+# 运行产物 / 本地缓存
+__pycache__/
+*.py[cod]
+tmp/
+*.wav
+*.mp3
+*.log
+
+# 训练好的模型（体积大，不入库）
+models/
+model/
+*.onnx
+*.onnx_data
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# 克隆出来的声音 / 参考音频
+voices/
+ref_voice*.wav
+*.silk
+
+# 运行时配置与状态（可能含密钥）
+panel_state.json
+data/
+config.local.json
+.env
