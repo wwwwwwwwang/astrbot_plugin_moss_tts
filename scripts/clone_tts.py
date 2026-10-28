@@ -4,9 +4,17 @@
 用法:
     python clone_tts.py --text "要念的话" --out /tmp/out.mp3
 """
-import argparse, os, re, shutil, subprocess, sys, tempfile, time
-import soundfile as sf
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
 import numpy as np
+import soundfile as sf
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 REF = os.path.join(BASE, "ref_voice.wav")
@@ -103,7 +111,8 @@ def main():
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", merged_wav,
                         "-codec:a", "libmp3lame", "-b:a", "64k", "-ar", "44100",
                         "-ac", "1", "-write_xing", "1", a.out], check=True)
-        print(f"输出: {a.out} 音频{len(merged)/48000:.2f}s | 共{ok_chars}字 总耗时{time.time()-t_all:.1f}s", flush=True)
+        total = time.time() - t_all
+        print(f"输出: {a.out} 音频{len(merged)/48000:.2f}s | 共{ok_chars}字 总耗时{total:.1f}s", flush=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
