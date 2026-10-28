@@ -43,6 +43,17 @@
   label.field{display:block;margin-bottom:10px}
   label.field>span{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
   .hint{font-size:12px;color:var(--ink3);margin-top:6px}
+  .sub{font-size:12px;font-weight:600;color:var(--ink2);letter-spacing:.02em;
+       margin:18px 0 10px;padding-left:8px;border-left:3px solid var(--accent);line-height:1.2}
+  .sub:first-of-type{margin-top:0}
+  .grid.form{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px 16px}
+  .grid.form label.field{margin-bottom:0;min-width:0}
+  .inline{display:flex;gap:6px;align-items:center}
+  .inline input{min-width:0}
+  .is-hidden{display:none !important}
+  .footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+          margin-top:18px;padding-top:14px;border-top:1px dashed var(--line)}
+  .footer .hint{margin:0}
   .voice-item{display:flex;justify-content:space-between;align-items:center;gap:10px;
               border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px}
   .voice-item.active{border-color:var(--accent);background:rgba(59,110,246,.06)}
@@ -89,41 +100,62 @@
   </div>
 
   <div class="card">
-    <h2>合成参数</h2>
-    <div class="grid">
-      <label class="field"><span>温度（0.1~1.5，越低越稳）</span>
-        <input type="number" id="temp" step="0.05" min="0.1" max="1.5"></label>
-      <label class="field"><span>top_p（0.1~1.0）</span>
-        <input type="number" id="topp" step="0.01" min="0.1" max="1"></label>
-      <label class="field"><span>帧上限（max_new_frames）</span>
-        <input type="number" id="frames" step="25" min="50" max="2000"></label>
+    <h2>参数设置</h2>
+
+    <div class="sub">合成</div>
+    <div class="grid form">
+      <label class="field"><span>温度</span>
+        <input type="number" id="temp" step="0.05" min="0.1" max="1.5">
+        <div class="hint">0.1~1.5，越低越稳</div></label>
+      <label class="field"><span>top_p</span>
+        <input type="number" id="topp" step="0.01" min="0.1" max="1">
+        <div class="hint">0.1~1.0，控制采样范围</div></label>
+      <label class="field"><span>帧上限</span>
+        <input type="number" id="frames" step="25" min="50" max="2000">
+        <div class="hint">max_new_frames，限制最长音频</div></label>
       <label class="field"><span>长句分句合成</span>
-        <select id="split"><option value="0">关闭（整句直出）</option><option value="1">开启</option></select></label>
-      <label class="field"><span>合成后自动释放内存</span>
-        <select id="autorelease"><option value="0">关闭（常驻，下一条更快）</option><option value="1">开启（内存常低于 2G，每条多等 5~10 秒）</option></select></label>
-      <label class="field"><span>自动语音（文本回复直接发语音）</span>
-        <select id="autovoice"><option value="0">关闭</option><option value="1">开启</option></select></label>
+        <select id="split"><option value="0">关闭（整句直出）</option><option value="1">开启（按标点分段）</option></select></label>
+    </div>
+
+    <div class="sub">语音发送</div>
+    <div class="grid form">
+      <label class="field"><span>自动语音</span>
+        <select id="autovoice"><option value="0">关闭</option><option value="1">开启（文本回复直接转语音）</option></select></label>
+      <label class="field"><span>触发概率</span>
+        <input type="number" id="voiceprob" step="0.05" min="0" max="1">
+        <div class="hint">0~1，0.9 表示九成回复转语音</div></label>
+      <label class="field"><span>语音最长字数</span>
+        <input type="number" id="voicemax" step="10" min="1" max="200">
+        <div class="hint">超过这个字数保留文字，不发语音</div></label>
       <label class="field"><span>私聊语音引擎</span>
         <select id="mode-private"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
       <label class="field"><span>群聊语音引擎</span>
         <select id="mode-group"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
+    </div>
+    <div class="grid form" data-edge-group>
       <label class="field"><span>edge 音色名</span>
         <input type="text" id="edgevoice" placeholder="zh-CN-XiaoyiNeural"></label>
       <label class="field"><span>edge 语速 / 音调</span>
-        <span style="display:flex;gap:6px">
+        <span class="inline">
           <input type="text" id="edgerate" placeholder="+0%">
           <input type="text" id="edgepitch" placeholder="+0Hz">
         </span></label>
-      <label class="field"><span>语音触发概率（0~1）</span>
-        <input type="number" id="voiceprob" step="0.05" min="0" max="1"></label>
-      <label class="field"><span>语音最长字数（超过保留文本）</span>
-        <input type="number" id="voicemax" step="10" min="1" max="200"></label>
-      <label class="field"><span>tmp 缓存保留小时（0 = 一直留）</span>
-        <input type="number" id="tmphours" step="1" min="0" max="720"></label>
-      <label class="field"><span>tmp 最多保留文件数</span>
-        <input type="number" id="tmpfiles" step="10" min="0" max="5000"></label>
     </div>
-    <div class="row">
+    <div class="hint" data-edge-group>只有选择 edge-tts 的会话类型才会用到这三项；moss-tts 使用上面「音色库」里选中的克隆音色。</div>
+
+    <div class="sub">运行与缓存</div>
+    <div class="grid form">
+      <label class="field"><span>合成后自动释放内存</span>
+        <select id="autorelease"><option value="0">关闭（常驻，下一条更快）</option><option value="1">开启（内存更低，每条多等 5~10 秒）</option></select></label>
+      <label class="field"><span>tmp 缓存保留小时</span>
+        <input type="number" id="tmphours" step="1" min="0" max="720">
+        <div class="hint">0 表示一直保留</div></label>
+      <label class="field"><span>tmp 最多保留文件数</span>
+        <input type="number" id="tmpfiles" step="10" min="0" max="5000">
+        <div class="hint">超出后按时间删最旧的</div></label>
+    </div>
+
+    <div class="footer">
       <button class="primary" id="btn-save">保存参数</button>
       <button id="btn-clean-tmp">清理 tmp 缓存</button>
       <span class="hint" id="clean-info"></span>
@@ -285,6 +317,7 @@
     $('edgevoice').value = c.edge_voice || 'zh-CN-XiaoyiNeural';
     $('edgerate').value = c.edge_rate || '+0%';
     $('edgepitch').value = c.edge_pitch || '+0Hz';
+    syncEdgeFields();
     $('voiceprob').value = c.auto_voice_prob ?? 0.3;
     $('voicemax').value = c.auto_voice_max_chars ?? 60;
     $('tmphours').value = c.tmp_keep_hours ?? 24;
@@ -422,6 +455,16 @@
     }
     btn.disabled = false; btn.textContent = '上传音色';
   };
+
+  function syncEdgeFields(){
+    const useEdge = $('mode-private').value === 'edge'
+      || $('mode-group').value === 'edge';
+    document.querySelectorAll('[data-edge-group]').forEach(el => {
+      el.classList.toggle('is-hidden', !useEdge);
+    });
+  }
+  $('mode-private').onchange = syncEdgeFields;
+  $('mode-group').onchange = syncEdgeFields;
 
   $('btn-save').onclick = async () => {
     const r = await apiPost('panel/config', {
