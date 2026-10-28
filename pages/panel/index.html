@@ -51,6 +51,15 @@
   .inline{display:flex;gap:6px;align-items:center}
   .inline input{min-width:0}
   .is-hidden{display:none !important}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 16px}
+  .tab{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;
+       padding:8px 16px;color:var(--ink2);font-size:13px}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .pane{padding-top:2px}
+  input[type=range]{width:100%;padding:0;border:none;background:transparent;accent-color:var(--accent)}
+  .range-val{color:var(--accent);font-size:12px;font-weight:600;
+             font-variant-numeric:tabular-nums;margin-left:4px}
   .footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
           margin-top:18px;padding-top:14px;border-top:1px dashed var(--line)}
   .footer .hint{margin:0}
@@ -121,34 +130,59 @@
   </div>
 
   <div class="card">
-    <h2>语音发送 <span class="tag">聊天场景</span></h2>
-    <div class="grid form">
-      <label class="field"><span>自动语音</span>
-        <select id="autovoice"><option value="0">关闭</option><option value="1">开启（文本回复直接转语音）</option></select></label>
-      <label class="field"><span>触发概率</span>
-        <input type="number" id="voiceprob" step="0.05" min="0" max="1">
-        <div class="hint">0~1，0.9 表示九成回复转语音</div></label>
-      <label class="field"><span>语音最长字数</span>
-        <input type="number" id="voicemax" step="10" min="1" max="200">
-        <div class="hint">超过这个字数保留文字，不发语音</div></label>
+    <h2>语音发送 <span class="tag">私聊 / 群聊分别配置</span></h2>
+    <div class="tabs" role="tablist">
+      <button class="tab active" type="button" role="tab" data-tab="private">私聊</button>
+      <button class="tab" type="button" role="tab" data-tab="group">群聊</button>
     </div>
-    <div class="sub">引擎选择</div>
-    <div class="grid form">
-      <label class="field"><span>私聊语音引擎</span>
-        <select id="mode-private"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
-      <label class="field"><span>群聊语音引擎</span>
-        <select id="mode-group"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
-    </div>
-    <div class="grid form" data-edge-group>
-      <label class="field"><span>edge 音色名</span>
-        <input type="text" id="edgevoice" placeholder="zh-CN-XiaoyiNeural"></label>
-      <label class="field"><span>edge 语速 / 音调</span>
-        <span class="inline">
-          <input type="text" id="edgerate" placeholder="+0%">
-          <input type="text" id="edgepitch" placeholder="+0Hz">
-        </span></label>
-    </div>
-    <div class="hint" data-edge-group>只有选择 edge-tts 的会话类型才会用到这三项；moss-tts 使用「音色库」里选中的克隆音色。</div>
+
+    <section class="pane" data-pane="private">
+      <div class="grid form">
+        <label class="field"><span>自动语音</span>
+          <select id="private-autovoice"><option value="0">关闭</option><option value="1">开启（文本回复直接转语音）</option></select></label>
+        <label class="field"><span>触发概率</span>
+          <input type="number" id="private-voiceprob" step="0.05" min="0" max="1">
+          <div class="hint">0~1，0.9 表示九成回复转语音</div></label>
+        <label class="field"><span>语音最长字数</span>
+          <input type="number" id="private-voicemax" step="10" min="1" max="200">
+          <div class="hint">超过这个字数保留文字，不发语音</div></label>
+        <label class="field"><span>语音引擎</span>
+          <select id="private-mode"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
+      </div>
+      <div class="grid form" data-edge-scope="private">
+        <label class="field"><span>edge 音色</span>
+          <select id="private-edgevoice" data-edge-voice></select></label>
+        <label class="field"><span>edge 语速 <b class="range-val" id="private-edgerate-val">+0%</b></span>
+          <input type="range" id="private-edgerate" min="-50" max="100" step="5" value="0"></label>
+        <label class="field"><span>edge 音调 <b class="range-val" id="private-edgepitch-val">+0Hz</b></span>
+          <input type="range" id="private-edgepitch" min="-50" max="50" step="1" value="0"></label>
+      </div>
+      <div class="hint">选 moss-tts 时用「音色库」里当前选中的克隆音色；选 edge-tts 时用上面三项。</div>
+    </section>
+
+    <section class="pane is-hidden" data-pane="group">
+      <div class="grid form">
+        <label class="field"><span>自动语音</span>
+          <select id="group-autovoice"><option value="0">关闭</option><option value="1">开启（文本回复直接转语音）</option></select></label>
+        <label class="field"><span>触发概率</span>
+          <input type="number" id="group-voiceprob" step="0.05" min="0" max="1">
+          <div class="hint">0~1，0.9 表示九成回复转语音</div></label>
+        <label class="field"><span>语音最长字数</span>
+          <input type="number" id="group-voicemax" step="10" min="1" max="200">
+          <div class="hint">超过这个字数保留文字，不发语音</div></label>
+        <label class="field"><span>语音引擎</span>
+          <select id="group-mode"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
+      </div>
+      <div class="grid form" data-edge-scope="group">
+        <label class="field"><span>edge 音色</span>
+          <select id="group-edgevoice" data-edge-voice></select></label>
+        <label class="field"><span>edge 语速 <b class="range-val" id="group-edgerate-val">+0%</b></span>
+          <input type="range" id="group-edgerate" min="-50" max="100" step="5" value="0"></label>
+        <label class="field"><span>edge 音调 <b class="range-val" id="group-edgepitch-val">+0Hz</b></span>
+          <input type="range" id="group-edgepitch" min="-50" max="50" step="1" value="0"></label>
+      </div>
+      <div class="hint">选 moss-tts 时用「音色库」里当前选中的克隆音色；选 edge-tts 时用上面三项。</div>
+    </section>
   </div>
 
   <div class="card">
@@ -269,6 +303,61 @@
 
   const kv = (label, value) => `<dl class="kv"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></dl>`;
 
+  const EDGE_VOICES = [
+    ['zh-CN-XiaoyiNeural', '晓伊 · 女 · 活泼'],
+    ['zh-CN-XiaoxiaoNeural', '晓晓 · 女 · 温暖'],
+    ['zh-CN-YunxiNeural', '云希 · 男 · 阳光'],
+    ['zh-CN-YunjianNeural', '云健 · 男 · 激情'],
+    ['zh-CN-YunyangNeural', '云扬 · 男 · 专业'],
+    ['zh-CN-YunxiaNeural', '云夏 · 男童 · 可爱'],
+    ['zh-CN-liaoning-XiaobeiNeural', '晓北 · 女 · 东北话'],
+    ['zh-CN-shaanxi-XiaoniNeural', '晓妮 · 女 · 陕西话'],
+    ['zh-HK-HiuMaanNeural', '曉曼 · 粤语女'],
+    ['zh-HK-HiuGaaiNeural', '曉佳 · 粤语女'],
+    ['zh-HK-WanLungNeural', '雲龍 · 粤语男'],
+    ['zh-TW-HsiaoChenNeural', '曉臻 · 台湾女'],
+    ['zh-TW-HsiaoYuNeural', '曉雨 · 台湾女'],
+    ['zh-TW-YunJheNeural', '雲哲 · 台湾男'],
+  ];
+
+  function fillEdgeVoices(){
+    document.querySelectorAll('select[data-edge-voice]').forEach(sel => {
+      sel.innerHTML = EDGE_VOICES.map(([v, label]) =>
+        `<option value="${v}">${label}（${v}）</option>`).join('');
+    });
+  }
+
+  function setEdgeVoice(scope, value){
+    const sel = $(scope + '-edgevoice');
+    if (!sel) return;
+    if (![...sel.options].some(o => o.value === value)) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value;
+      sel.appendChild(opt);
+    }
+    sel.value = value;
+  }
+
+  const parseSigned = raw => {
+    const m = String(raw ?? '').match(/[+-]?\d+/);
+    return m ? parseInt(m[0], 10) : 0;
+  };
+  const fmtSigned = (val, suffix) => (val >= 0 ? '+' : '') + val + suffix;
+
+  function syncRange(id, suffix){
+    const input = $(id);
+    if (!input) return;
+    $(id + '-val').textContent = fmtSigned(parseInt(input.value, 10) || 0, suffix);
+  }
+
+  function setRange(id, value, suffix){
+    const input = $(id);
+    if (!input) return;
+    input.value = Math.min(parseInt(input.max, 10), Math.max(parseInt(input.min, 10), value));
+    syncRange(id, suffix);
+  }
+
   async function loadStatus() {
     $('env-tag').textContent = '读取中…';
     let d;
@@ -323,15 +412,17 @@
     $('frames').value = c.max_new_frames;
     $('split').value = c.split_long_text ? '1' : '0';
     $('autorelease').value = c.auto_release ? '1' : '0';
-    $('autovoice').value = c.auto_voice ? '1' : '0';
-    $('mode-private').value = c.tts_mode_private || 'moss';
-    $('mode-group').value = c.tts_mode_group || 'moss';
-    $('edgevoice').value = c.edge_voice || 'zh-CN-XiaoyiNeural';
-    $('edgerate').value = c.edge_rate || '+0%';
-    $('edgepitch').value = c.edge_pitch || '+0Hz';
-    syncEdgeFields();
-    $('voiceprob').value = c.auto_voice_prob ?? 0.3;
-    $('voicemax').value = c.auto_voice_max_chars ?? 60;
+    ['private', 'group'].forEach(scope => {
+      const v = c[scope] || {};
+      $(scope + '-autovoice').value = v.auto_voice ? '1' : '0';
+      $(scope + '-voiceprob').value = v.voice_prob ?? 0.3;
+      $(scope + '-voicemax').value = v.voice_max_chars ?? 60;
+      $(scope + '-mode').value = v.tts_mode || 'moss';
+      setEdgeVoice(scope, v.edge_voice || 'zh-CN-XiaoyiNeural');
+      setRange(scope + '-edgerate', parseSigned(v.edge_rate), '%');
+      setRange(scope + '-edgepitch', parseSigned(v.edge_pitch), 'Hz');
+      syncEdgeFields(scope);
+    });
     $('tmphours').value = c.tmp_keep_hours ?? 24;
     $('tmpfiles').value = c.tmp_max_files ?? 60;
     $('preview-info').textContent = c.ref_audio
@@ -468,34 +559,55 @@
     btn.disabled = false; btn.textContent = '上传音色';
   };
 
-  function syncEdgeFields(){
-    const useEdge = $('mode-private').value === 'edge'
-      || $('mode-group').value === 'edge';
-    document.querySelectorAll('[data-edge-group]').forEach(el => {
+  function syncEdgeFields(scope){
+    const mode = $(scope + '-mode');
+    const useEdge = !!mode && mode.value === 'edge';
+    document.querySelectorAll(`[data-edge-scope="${scope}"]`).forEach(el => {
       el.classList.toggle('is-hidden', !useEdge);
     });
   }
-  $('mode-private').onchange = syncEdgeFields;
-  $('mode-group').onchange = syncEdgeFields;
+  ['private', 'group'].forEach(scope => {
+    const mode = $(scope + '-mode');
+    if (mode) mode.onchange = () => syncEdgeFields(scope);
+  });
+
+  [['edgerate', '%'], ['edgepitch', 'Hz']].forEach(([key, suffix]) => {
+    ['private', 'group'].forEach(scope => {
+      const input = $(`${scope}-${key}`);
+      if (input) input.oninput = () => syncRange(`${scope}-${key}`, suffix);
+    });
+  });
+  fillEdgeVoices();
+
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('[data-pane]').forEach(pane => {
+        pane.classList.toggle('is-hidden', pane.dataset.pane !== btn.dataset.tab);
+      });
+    };
+  });
 
   $('btn-save').onclick = async () => {
-    const r = await apiPost('panel/config', {
+    const body = {
       audio_temperature: parseFloat($('temp').value),
       audio_top_p: parseFloat($('topp').value),
       max_new_frames: parseInt($('frames').value, 10),
       split_long_text: $('split').value === '1',
       auto_release: $('autorelease').value === '1',
-      auto_voice: $('autovoice').value === '1',
-      tts_mode_private: $('mode-private').value,
-      tts_mode_group: $('mode-group').value,
-      edge_voice: $('edgevoice').value.trim() || 'zh-CN-XiaoyiNeural',
-      edge_rate: $('edgerate').value.trim() || '+0%',
-      edge_pitch: $('edgepitch').value.trim() || '+0Hz',
-      auto_voice_prob: parseFloat($('voiceprob').value),
-      auto_voice_max_chars: parseInt($('voicemax').value, 10),
       tmp_keep_hours: parseInt($('tmphours').value, 10),
       tmp_max_files: parseInt($('tmpfiles').value, 10)
+    };
+    ['private', 'group'].forEach(scope => {
+      body[scope + '_auto_voice'] = $(scope + '-autovoice').value === '1';
+      body[scope + '_voice_prob'] = parseFloat($(scope + '-voiceprob').value);
+      body[scope + '_voice_max_chars'] = parseInt($(scope + '-voicemax').value, 10);
+      body[scope + '_tts_mode'] = $(scope + '-mode').value;
+      body[scope + '_edge_voice'] = $(scope + '-edgevoice').value || 'zh-CN-XiaoyiNeural';
+      body[scope + '_edge_rate'] = fmtSigned(parseInt($(scope + '-edgerate').value, 10) || 0, '%');
+      body[scope + '_edge_pitch'] = fmtSigned(parseInt($(scope + '-edgepitch').value, 10) || 0, 'Hz');
     });
+    const r = await apiPost('panel/config', body);
     if (r && r.success) { toast('参数已保存'); loadStatus(); }
     else toast((r && r.error) || '保存失败');
   };

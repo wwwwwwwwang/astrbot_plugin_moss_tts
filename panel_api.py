@@ -32,6 +32,19 @@ PLUGIN_NAME = "astrbot_plugin_moss_tts"
 
 MOSS_DIR = "/AstrBot/data/moss-tts"
 
+SCOPES = ("private", "group")
+
+# 私聊 / 群聊各自一份自动语音配置，互不影响
+SCOPE_DEFAULTS = {
+    "auto_voice": False,
+    "voice_prob": 0.3,
+    "voice_max_chars": 60,
+    "tts_mode": "moss",
+    "edge_voice": "zh-CN-XiaoyiNeural",
+    "edge_rate": "+0%",
+    "edge_pitch": "+0Hz",
+}
+
 DEFAULT_STATE = {
     "ref_audio": "",
     "audio_temperature": 0.8,
@@ -39,16 +52,15 @@ DEFAULT_STATE = {
     "max_new_frames": 375,
     "split_long_text": False,
     "auto_release": True,
-    # 自动语音：把 LLM 的纯文本回复直接换成语音条
-    "auto_voice": False,
-    "auto_voice_prob": 0.3,
-    "auto_voice_max_chars": 60,
     # tmp 清理：超过小时数的删掉，剩下的只留最新 max_files 个
     "tmp_keep_hours": 24,
     "tmp_max_files": 60,
     # 音色自定义名字：{文件名: 显示名}
     "voice_names": {},
-    # 语音引擎：moss = 克隆音色，edge = 微软 edge-tts
+    # 旧版全局键，只在迁移旧配置时读取，面板不再写入
+    "auto_voice": False,
+    "auto_voice_prob": 0.3,
+    "auto_voice_max_chars": 60,
     "tts_mode_private": "moss",
     "tts_mode_group": "moss",
     "edge_voice": "zh-CN-XiaoyiNeural",
@@ -56,17 +68,50 @@ DEFAULT_STATE = {
     "edge_pitch": "+0Hz",
     # 启用插件后是否强制外部语音改用插件音色（edge 模式不受影响）
     "force_plugin_voice": True,
+    **{f"{scope}_{key}": val for scope in SCOPES for key, val in SCOPE_DEFAULTS.items()},
 }
 
 
+def _migrate_legacy(state: dict, raw: dict) -> None:
+    """把旧版全局配置映射到私聊 / 群聊两份配置里。"""
+    legacy = {
+        "auto_voice": "auto_voice",
+        "voice_prob": "auto_voice_prob",
+        "voice_max_chars": "auto_voice_max_chars",
+        "edge_voice": "edge_voice",
+        "edge_rate": "edge_rate",
+        "edge_pitch": "edge_pitch",
+    }
+    for scope in SCOPES:
+        for key, src in legacy.items():
+            target = f"{scope}_{key}"
+            if target not in raw and src in raw:
+                state[target] = raw[src]
+        target = f"{scope}_tts_mode"
+        src = f"tts_mode_{scope}"
+        if target not in raw and src in raw:
+            state[target] = raw[src]
+
+
 def load_state() -> dict:
-    state = dict(DEFAULT_STATE)
+    raw: dict = {}
     if STATE_PATH.exists():
         try:
-            state.update(json.loads(STATE_PATH.read_text("utf-8")))
+            raw = json.loads(STATE_PATH.read_text("utf-8"))
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[moss-tts] 读取面板配置失败: {e}")
+    state = dict(DEFAULT_STATE)
+    state.update(raw)
+    _migrate_legacy(state, raw)
     return state
+
+
+def scope_config(state: dict, scope: str) -> dict:
+    """取某个会话类型的完整语音配置。"""
+    return {
+        key: state.get(f"{scope}_{key}", default)
+        for key, default in SCOPE_DEFAULTS.items()
+    }
 
 
 def save_state(state: dict) -> None:
@@ -283,16 +328,10 @@ class PanelAPI:
                 "max_new_frames": state.get("max_new_frames", 375),
                 "split_long_text": bool(state.get("split_long_text", False)),
                 "auto_release": bool(state.get("auto_release", True)),
-                "auto_voice": bool(state.get("auto_voice", False)),
-                "auto_voice_prob": float(state.get("auto_voice_prob", 0.3)),
-                "auto_voice_max_chars": int(state.get("auto_voice_max_chars", 60)),
                 "tmp_keep_hours": int(state.get("tmp_keep_hours", 24)),
                 "tmp_max_files": int(state.get("tmp_max_files", 60)),
-                "tts_mode_private": state.get("tts_mode_private", "moss"),
-                "tts_mode_group": state.get("tts_mode_group", "moss"),
-                "edge_voice": state.get("edge_voice", "zh-CN-XiaoyiNeural"),
-                "edge_rate": state.get("edge_rate", "+0%"),
-                "edge_pitch": state.get("edge_pitch", "+0Hz"),
+                "private": scope_config(state, "private"),
+                "group": scope_config(state, "group"),
                 "force_plugin_voice": bool(state.get("force_plugin_voice", True)),
             },
             "voices_dir": str(VOICE_DIR),
@@ -461,30 +500,46 @@ class PanelAPI:
             state["split_long_text"] = bool(payload["split_long_text"])
         if "auto_release" in payload:
             state["auto_release"] = bool(payload["auto_release"])
-        if "auto_voice" in payload:
-            state["auto_voice"] = bool(payload["auto_voice"])
         if "force_plugin_voice" in payload:
             state["force_plugin_voice"] = bool(payload["force_plugin_voice"])
-        for key in ("tts_mode_private", "tts_mode_group"):
+        for scope in SCOPES:
+            key = f"{scope}_auto_voice"
+            if key in payload:
+                state[key] = bool(payload[key])
+            key = f"{scope}_tts_mode"
             if key in payload:
                 mode = str(payload[key]).lower()
                 if mode not in ("moss", "edge"):
                     return jsonify({"success": False, "error": f"{key} 只能是 moss 或 edge"}), 400
                 state[key] = mode
-        if "edge_voice" in payload:
-            voice = str(payload["edge_voice"]).strip()
-            if not voice:
-                return jsonify({"success": False, "error": "edge 音色不能为空"}), 400
-            state["edge_voice"] = voice
-        for key in ("edge_rate", "edge_pitch"):
+            key = f"{scope}_edge_voice"
             if key in payload:
-                val = str(payload[key]).strip()
-                if not re.fullmatch(r"[+-]\d+(?:\.\d+)?(?:%|Hz)?", val):
-                    return jsonify({"success": False, "error": f"{key} 格式像 +0% 或 +15Hz"}), 400
-                state[key] = val
+                voice = str(payload[key]).strip()
+                if not voice:
+                    return jsonify({"success": False, "error": f"{key} 不能为空"}), 400
+                state[key] = voice
+            for field in ("edge_rate", "edge_pitch"):
+                key = f"{scope}_{field}"
+                if key in payload:
+                    val = str(payload[key]).strip()
+                    if not re.fullmatch(r"[+-]\d+(?:\.\d+)?(?:%|Hz)?", val):
+                        return jsonify({"success": False, "error": f"{key} 格式像 +0% 或 +15Hz"}), 400
+                    state[key] = val
+            key = f"{scope}_voice_prob"
+            if key in payload:
+                try:
+                    val = float(payload[key])
+                except (TypeError, ValueError):
+                    return jsonify({"success": False, "error": f"{key} 不是合法数字"}), 400
+                state[key] = round(max(0.0, min(1.0, val)), 2)
+            key = f"{scope}_voice_max_chars"
+            if key in payload:
+                try:
+                    val = int(float(payload[key]))
+                except (TypeError, ValueError):
+                    return jsonify({"success": False, "error": f"{key} 不是合法整数"}), 400
+                state[key] = max(1, min(200, val))
         for key, lo, hi in (
-            ("auto_voice_prob", 0.0, 1.0),
-            ("auto_voice_max_chars", 1, 200),
             ("tmp_keep_hours", 0, 24 * 30),
             ("tmp_max_files", 0, 5000),
         ):
@@ -493,8 +548,7 @@ class PanelAPI:
                     val = float(payload[key])
                 except (TypeError, ValueError):
                     return jsonify({"success": False, "error": f"{key} 不是合法数字"}), 400
-                val = max(lo, min(hi, val))
-                state[key] = round(val, 2) if key == "auto_voice_prob" else int(val)
+                state[key] = int(max(lo, min(hi, val)))
         save_state(state)
         self.plugin.reload_state()
         return jsonify({"success": True, "config": state})

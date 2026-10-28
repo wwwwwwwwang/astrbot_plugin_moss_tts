@@ -132,23 +132,31 @@ class MossTTSPlugin(Star):
             cls._moss_voice_guard = False
             cls._moss_voice_guard_orig = None
 
-    def _mode_for(self, event=None) -> str:
-        """按会话类型返回语音引擎：moss 或 edge。"""
-        key = "tts_mode_group"
+    def _scope(self, event=None) -> str:
+        """当前会话的配置分组：private 或 group。"""
         try:
             if event is not None and event.is_private_chat():
-                key = "tts_mode_private"
+                return "private"
         except Exception:  # noqa: BLE001
             pass
-        mode = str(self._state.get(key, "moss")).lower()
+        return "group"
+
+    def _pref(self, event, name: str, default=None):
+        """读取当前会话类型下的配置项。"""
+        value = self._state.get(f"{self._scope(event)}_{name}")
+        return default if value is None else value
+
+    def _mode_for(self, event=None) -> str:
+        """按会话类型返回语音引擎：moss 或 edge。"""
+        mode = str(self._pref(event, "tts_mode", "moss")).lower()
         return "edge" if mode == "edge" else "moss"
 
-    async def _synth_edge(self, text: str) -> str:
+    async def _synth_edge(self, text: str, event=None) -> str:
         """用 edge-tts 合成，返回 mp3 路径。"""
         out = TMP_DIR / f"edge_{uuid.uuid4().hex[:10]}.mp3"
-        voice = str(self._state.get("edge_voice") or "zh-CN-XiaoyiNeural")
-        rate = str(self._state.get("edge_rate") or "+0%")
-        pitch = str(self._state.get("edge_pitch") or "+0Hz")
+        voice = str(self._pref(event, "edge_voice", "zh-CN-XiaoyiNeural"))
+        rate = str(self._pref(event, "edge_rate", "+0%"))
+        pitch = str(self._pref(event, "edge_pitch", "+0Hz"))
         exe = shutil.which("edge-tts") or "edge-tts"
         cmd = [
             exe,
@@ -177,7 +185,7 @@ class MossTTSPlugin(Star):
     async def _synth_voice(self, text: str, event=None) -> str:
         """按当前会话的模式选择引擎合成语音。"""
         if self._mode_for(event) == "edge":
-            return await self._synth_edge(text)
+            return await self._synth_edge(text, event)
         return await self._synth(text)
 
     async def _rewrite_foreign_records(
@@ -386,8 +394,8 @@ class MossTTSPlugin(Star):
     # ---------- 自动语音 ----------
     @filter.on_decorating_result()
     async def auto_voice(self, event: AstrMessageEvent):
-        """按概率把纯文本回复直接换成语音条（面板里开关 + 概率控制）。"""
-        if not self._state.get("auto_voice"):
+        """按概率把纯文本回复直接换成语音条（私聊 / 群聊各自配置）。"""
+        if not self._pref(event, "auto_voice", False):
             return
         if event.get_extra("moss_tts_no_voice"):
             return
@@ -406,8 +414,8 @@ class MossTTSPlugin(Star):
         if not text or text.startswith("/"):
             return
         try:
-            max_chars = int(self._state.get("auto_voice_max_chars") or 60)
-            prob = float(self._state.get("auto_voice_prob") or 0.3)
+            max_chars = int(self._pref(event, "voice_max_chars", 60))
+            prob = float(self._pref(event, "voice_prob", 0.3))
         except (TypeError, ValueError):
             max_chars, prob = 60, 0.3
         if len(text) > max_chars:
@@ -439,6 +447,8 @@ class MossTTSPlugin(Star):
         if sub in ("", "信息", "info"):
             exists = os.path.exists(self.ref_audio)
             alias = voice_alias(os.path.basename(self.ref_audio), self._state) if self.ref_audio else "未设置"
+            scope_label = "私聊" if self._scope(event) == "private" else "群聊"
+            engine = "edge-tts" if self._mode_for(event) == "edge" else "moss-tts"
             yield event.plain_result(
                 "音色状态\n"
                 f"当前音色：{alias}\n"
@@ -446,11 +456,11 @@ class MossTTSPlugin(Star):
                 f"文件存在：{'是' if exists else '否'}\n"
                 f"温度：{self.temperature}　top_p：{self.top_p}　帧上限：{self.max_frames}\n"
                 f"模型目录：{self.config.get('model_dir') or '默认'}\n"
-                f"自动语音：{'开' if self._state.get('auto_voice') else '关'}"
-                f"（概率 {self._state.get('auto_voice_prob')}，"
-                f"上限 {self._state.get('auto_voice_max_chars')} 字）\n"
+                f"语音（{scope_label}）：{'开' if self._pref(event, 'auto_voice', False) else '关'}"
+                f"（概率 {self._pref(event, 'voice_prob', 0.3)}，"
+                f"上限 {self._pref(event, 'voice_max_chars', 60)} 字，引擎 {engine}）\n"
                 "用法：/声音 试听 文本 ｜ /声音 设置 <路径> ｜ /声音 参数 0.7 0.9 ｜ "
-                "/声音 自动 开 ｜ /声音 重载"
+                "/声音 自动 开 ｜ /声音 概率 0.9 ｜ /声音 重载"
             )
             return
 
@@ -499,24 +509,28 @@ class MossTTSPlugin(Star):
 
         if sub == "自动":
             arg = arg.strip()
+            scope = self._scope(event)
+            key = f"{scope}_auto_voice"
             if arg in ("开", "on", "1"):
-                self._state["auto_voice"] = True
+                self._state[key] = True
             elif arg in ("关", "off", "0"):
-                self._state["auto_voice"] = False
+                self._state[key] = False
             else:
+                scope_label = "私聊" if scope == "private" else "群聊"
                 yield event.plain_result(
-                    f"自动语音：{'开' if self._state.get('auto_voice') else '关'}"
-                    f"　概率 {self._state.get('auto_voice_prob')}"
-                    f"　字数上限 {self._state.get('auto_voice_max_chars')}\n"
+                    f"自动语音（{scope_label}）：{'开' if self._pref(event, 'auto_voice', False) else '关'}"
+                    f"　概率 {self._pref(event, 'voice_prob', 0.3)}"
+                    f"　字数上限 {self._pref(event, 'voice_max_chars', 60)}\n"
                     "用法：/声音 自动 开｜/声音 自动 关"
                 )
                 return
             from .panel_api import save_state
 
             save_state(self._state)
+            scope_label = "私聊" if scope == "private" else "群聊"
             yield event.plain_result(
-                f"自动语音已{'开启' if self._state.get('auto_voice') else '关闭'}"
-                f"（概率 {self._state.get('auto_voice_prob')}）"
+                f"{scope_label}自动语音已{'开启' if self._state.get(key) else '关闭'}"
+                f"（概率 {self._pref(event, 'voice_prob', 0.3)}）"
             )
             return
 
@@ -528,9 +542,10 @@ class MossTTSPlugin(Star):
                 return
             from .panel_api import save_state
 
-            self._state["auto_voice_prob"] = prob
+            self._state[f"{self._scope(event)}_voice_prob"] = prob
             save_state(self._state)
-            yield event.plain_result(f"自动语音概率已设为 {prob}")
+            scope_label = "私聊" if self._scope(event) == "private" else "群聊"
+            yield event.plain_result(f"{scope_label}自动语音概率已设为 {prob}")
             return
 
         if sub == "重载":
