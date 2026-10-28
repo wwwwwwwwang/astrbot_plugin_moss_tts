@@ -48,6 +48,14 @@ DEFAULT_STATE = {
     "tmp_max_files": 60,
     # 音色自定义名字：{文件名: 显示名}
     "voice_names": {},
+    # 语音引擎：moss = 克隆音色，edge = 微软 edge-tts
+    "tts_mode_private": "moss",
+    "tts_mode_group": "moss",
+    "edge_voice": "zh-CN-XiaoyiNeural",
+    "edge_rate": "+0%",
+    "edge_pitch": "+0Hz",
+    # 启用插件后是否强制外部语音改用插件音色（edge 模式不受影响）
+    "force_plugin_voice": True,
 }
 
 
@@ -280,6 +288,12 @@ class PanelAPI:
                 "auto_voice_max_chars": int(state.get("auto_voice_max_chars", 60)),
                 "tmp_keep_hours": int(state.get("tmp_keep_hours", 24)),
                 "tmp_max_files": int(state.get("tmp_max_files", 60)),
+                "tts_mode_private": state.get("tts_mode_private", "moss"),
+                "tts_mode_group": state.get("tts_mode_group", "moss"),
+                "edge_voice": state.get("edge_voice", "zh-CN-XiaoyiNeural"),
+                "edge_rate": state.get("edge_rate", "+0%"),
+                "edge_pitch": state.get("edge_pitch", "+0Hz"),
+                "force_plugin_voice": bool(state.get("force_plugin_voice", True)),
             },
             "voices_dir": str(VOICE_DIR),
         })
@@ -449,6 +463,25 @@ class PanelAPI:
             state["auto_release"] = bool(payload["auto_release"])
         if "auto_voice" in payload:
             state["auto_voice"] = bool(payload["auto_voice"])
+        if "force_plugin_voice" in payload:
+            state["force_plugin_voice"] = bool(payload["force_plugin_voice"])
+        for key in ("tts_mode_private", "tts_mode_group"):
+            if key in payload:
+                mode = str(payload[key]).lower()
+                if mode not in ("moss", "edge"):
+                    return jsonify({"success": False, "error": f"{key} 只能是 moss 或 edge"}), 400
+                state[key] = mode
+        if "edge_voice" in payload:
+            voice = str(payload["edge_voice"]).strip()
+            if not voice:
+                return jsonify({"success": False, "error": "edge 音色不能为空"}), 400
+            state["edge_voice"] = voice
+        for key in ("edge_rate", "edge_pitch"):
+            if key in payload:
+                val = str(payload[key]).strip()
+                if not re.fullmatch(r"[+-]\d+(?:\.\d+)?(?:%|Hz)?", val):
+                    return jsonify({"success": False, "error": f"{key} 格式像 +0% 或 +15Hz"}), 400
+                state[key] = val
         for key, lo, hi in (
             ("auto_voice_prob", 0.0, 1.0),
             ("auto_voice_max_chars", 1, 200),

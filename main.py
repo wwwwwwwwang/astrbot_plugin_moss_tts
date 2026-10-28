@@ -13,6 +13,7 @@ import asyncio
 import os
 import random
 import re
+import shutil
 import threading
 import time
 import uuid
@@ -104,7 +105,9 @@ class MossTTSPlugin(Star):
 
         async def call(inner_self, context, **kwargs):
             try:
-                error = await plugin._rewrite_foreign_records(kwargs)
+                error = await plugin._rewrite_foreign_records(
+                    kwargs, getattr(context.context, "event", None)
+                )
                 if error:
                     return error
             except Exception as e:  # noqa: BLE001
@@ -129,12 +132,65 @@ class MossTTSPlugin(Star):
             cls._moss_voice_guard = False
             cls._moss_voice_guard_orig = None
 
-    async def _rewrite_foreign_records(self, kwargs: dict) -> str | None:
+    def _mode_for(self, event=None) -> str:
+        """按会话类型返回语音引擎：moss 或 edge。"""
+        key = "tts_mode_group"
+        try:
+            if event is not None and event.is_private_chat():
+                key = "tts_mode_private"
+        except Exception:  # noqa: BLE001
+            pass
+        mode = str(self._state.get(key, "moss")).lower()
+        return "edge" if mode == "edge" else "moss"
+
+    async def _synth_edge(self, text: str) -> str:
+        """用 edge-tts 合成，返回 mp3 路径。"""
+        out = TMP_DIR / f"edge_{uuid.uuid4().hex[:10]}.mp3"
+        voice = str(self._state.get("edge_voice") or "zh-CN-XiaoyiNeural")
+        rate = str(self._state.get("edge_rate") or "+0%")
+        pitch = str(self._state.get("edge_pitch") or "+0Hz")
+        exe = shutil.which("edge-tts") or "edge-tts"
+        cmd = [
+            exe,
+            "--voice", voice,
+            f"--rate={rate}",
+            f"--pitch={pitch}",
+            "--text", text,
+            "--write-media", str(out),
+        ]
+        started = time.time()
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0 or not out.exists():
+            msg = stderr.decode(errors="ignore")[-200:] if stderr else "unknown error"
+            raise RuntimeError(f"edge-tts 合成失败: {msg}")
+        logger.info(
+            f"[moss-tts] edge-tts 合成 {len(text)} 字，耗时 {time.time() - started:.1f}s"
+        )
+        self._maybe_cleanup_tmp()
+        return str(out)
+
+    async def _synth_voice(self, text: str, event=None) -> str:
+        """按当前会话的模式选择引擎合成语音。"""
+        if self._mode_for(event) == "edge":
+            return await self._synth_edge(text)
+        return await self._synth(text)
+
+    async def _rewrite_foreign_records(
+        self, kwargs: dict, event=None
+    ) -> str | None:
         """把工具参数里的外部语音路径替换成插件合成结果。
 
         返回非空字符串表示需要直接作为工具结果返回（例如没有可念的文字）。
         """
         if not self._state.get("force_plugin_voice", True):
+            return None
+        # edge 模式下不拦截，允许模型直接发送 edge-tts 生成的音频
+        if self._mode_for(event) == "edge":
             return None
         messages = kwargs.get("messages")
         if not isinstance(messages, list) or not messages:
@@ -361,11 +417,12 @@ class MossTTSPlugin(Star):
         if len(spoken) < 1:
             return
         try:
-            path = await self._synth(spoken)
+            path = await self._synth_voice(spoken, event)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[moss-tts] 自动语音合成失败: {e}")
             return
-        self._maybe_release()
+        if self._mode_for(event) == "moss":
+            self._maybe_release()
         result.chain = [Record(file=path)]
 
     # ---------- 指令 ----------

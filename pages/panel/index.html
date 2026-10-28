@@ -103,6 +103,17 @@
         <select id="autorelease"><option value="0">关闭（常驻，下一条更快）</option><option value="1">开启（内存常低于 2G，每条多等 5~10 秒）</option></select></label>
       <label class="field"><span>自动语音（文本回复直接发语音）</span>
         <select id="autovoice"><option value="0">关闭</option><option value="1">开启</option></select></label>
+      <label class="field"><span>私聊语音引擎</span>
+        <select id="mode-private"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
+      <label class="field"><span>群聊语音引擎</span>
+        <select id="mode-group"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
+      <label class="field"><span>edge 音色名</span>
+        <input type="text" id="edgevoice" placeholder="zh-CN-XiaoyiNeural"></label>
+      <label class="field"><span>edge 语速 / 音调</span>
+        <span style="display:flex;gap:6px">
+          <input type="text" id="edgerate" placeholder="+0%">
+          <input type="text" id="edgepitch" placeholder="+0Hz">
+        </span></label>
       <label class="field"><span>语音触发概率（0~1）</span>
         <input type="number" id="voiceprob" step="0.05" min="0" max="1"></label>
       <label class="field"><span>语音最长字数（超过保留文本）</span>
@@ -269,6 +280,11 @@
     $('split').value = c.split_long_text ? '1' : '0';
     $('autorelease').value = c.auto_release ? '1' : '0';
     $('autovoice').value = c.auto_voice ? '1' : '0';
+    $('mode-private').value = c.tts_mode_private || 'moss';
+    $('mode-group').value = c.tts_mode_group || 'moss';
+    $('edgevoice').value = c.edge_voice || 'zh-CN-XiaoyiNeural';
+    $('edgerate').value = c.edge_rate || '+0%';
+    $('edgepitch').value = c.edge_pitch || '+0Hz';
     $('voiceprob').value = c.auto_voice_prob ?? 0.3;
     $('voicemax').value = c.auto_voice_max_chars ?? 60;
     $('tmphours').value = c.tmp_keep_hours ?? 24;
@@ -415,6 +431,11 @@
       split_long_text: $('split').value === '1',
       auto_release: $('autorelease').value === '1',
       auto_voice: $('autovoice').value === '1',
+      tts_mode_private: $('mode-private').value,
+      tts_mode_group: $('mode-group').value,
+      edge_voice: $('edgevoice').value.trim() || 'zh-CN-XiaoyiNeural',
+      edge_rate: $('edgerate').value.trim() || '+0%',
+      edge_pitch: $('edgepitch').value.trim() || '+0Hz',
       auto_voice_prob: parseFloat($('voiceprob').value),
       auto_voice_max_chars: parseInt($('voicemax').value, 10),
       tmp_keep_hours: parseInt($('tmphours').value, 10),
