@@ -301,7 +301,7 @@ class MossTTSPlugin(Star):
         out = TMP_DIR / f"moss_{uuid.uuid4().hex[:10]}.wav"
         engine = MossEngine.get(self.config.get("model_dir") or DEFAULT_MODEL_DIR)
         started = time.time()
-        await asyncio.to_thread(
+        path = await asyncio.to_thread(
             engine.synth,
             text,
             str(out),
@@ -312,7 +312,8 @@ class MossTTSPlugin(Star):
         )
         logger.info(f"[moss-tts] 合成 {len(text)} 字，耗时 {time.time() - started:.1f}s")
         self._maybe_cleanup_tmp()
-        return str(out)
+        # engine 会把结果归一化成 24kHz 单声道，路径可能变化，必须用返回值
+        return str(path)
 
     def _maybe_cleanup_tmp(self, force: bool = False) -> None:
         """每 5 分钟最多清一次 tmp，避免合成音频无限堆积。"""

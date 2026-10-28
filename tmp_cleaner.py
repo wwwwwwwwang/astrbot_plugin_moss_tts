@@ -6,8 +6,13 @@ from pathlib import Path
 
 
 def cleanup_tmp(tmp_dir: Path, keep_hours: int = 24, max_files: int = 60,
-                patterns: tuple[str, ...] = ("*.wav",)) -> int:
-    """删除超过 keep_hours 的文件，再只保留最新 max_files 个。返回删除数量。"""
+                patterns: tuple[str, ...] = ("*.wav", "*.mp3"),
+                min_age_seconds: float = 120) -> int:
+    """删除超过 keep_hours 的文件，再只保留最新 max_files 个。返回删除数量。
+
+    min_age_seconds 内的新文件不参与数量清理，避免把刚合成、还没发出去的
+    语音删掉（分句合成和多条消息并发时容易撞上）。
+    """
     now = time.time()
     removed = 0
     keep: list[tuple[float, Path]] = []
@@ -27,10 +32,16 @@ def cleanup_tmp(tmp_dir: Path, keep_hours: int = 24, max_files: int = 60,
                 keep.append((st.st_mtime, p))
     if max_files > 0 and len(keep) > max_files:
         keep.sort(key=lambda x: x[0])
-        for _mtime, p in keep[:-max_files]:
+        excess = len(keep) - max_files
+        for mtime, p in keep:
+            if excess <= 0:
+                break
+            if now - mtime < min_age_seconds:
+                continue
             try:
                 p.unlink()
                 removed += 1
+                excess -= 1
             except OSError:
                 pass
     return removed
