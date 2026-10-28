@@ -176,6 +176,38 @@ class MossEngine:
         rt = self.ensure_loaded()
         return rt.encode_reference_audio(wav_path)
 
+
+    def _normalize_output(self, wav_path: str) -> str:
+        """把合成结果统一成 24kHz 单声道 16bit WAV。
+
+        模型原生输出 48kHz 双声道，而 QQ 语音（SILK）的标准采样率是 24kHz。
+        统一在插件侧降采样可以避免上游编码器保留 48kHz 导致 PC 端无法播放，
+        同时把待上传体积压到约 1/4。
+        """
+        import subprocess
+
+        out = str(Path(wav_path).with_name(Path(wav_path).stem + "_24k.wav"))
+        try:
+            proc = subprocess.run(
+                [
+                    "ffmpeg", "-y", "-loglevel", "error",
+                    "-i", wav_path,
+                    "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+                    out,
+                ],
+                capture_output=True,
+                timeout=120,
+            )
+            if proc.returncode == 0 and os.path.exists(out):
+                try:
+                    os.remove(wav_path)
+                except OSError:
+                    pass
+                return out
+        except Exception:  # noqa: BLE001
+            pass
+        return wav_path
+
     def synth(
         self,
         text: str,
@@ -212,7 +244,7 @@ class MossEngine:
             kwargs["seed"] = seed
 
         res = rt.synthesize(**kwargs)
-        return str(res["audio_path"])
+        return self._normalize_output(str(res["audio_path"]))
 
     def voice_profile(self, wav_path: str, out_json: str) -> dict:
         """把参考音频编码成声纹，存成 json（避免每次重新编码）。"""
