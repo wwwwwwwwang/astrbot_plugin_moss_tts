@@ -54,6 +54,10 @@
   .footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
           margin-top:18px;padding-top:14px;border-top:1px dashed var(--line)}
   .footer .hint{margin:0}
+  .savebar{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+           padding:12px 16px;background:var(--card);border:1px solid var(--line);
+           border-radius:var(--radius);box-shadow:0 -2px 12px rgba(0,0,0,.06);z-index:5}
+  .savebar .hint{margin:0}
   .voice-item{display:flex;justify-content:space-between;align-items:center;gap:10px;
               border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px}
   .voice-item.active{border-color:var(--accent);background:rgba(59,110,246,.06)}
@@ -100,9 +104,7 @@
   </div>
 
   <div class="card">
-    <h2>参数设置</h2>
-
-    <div class="sub">合成</div>
+    <h2>合成参数 <span class="tag">moss-tts 模型</span></h2>
     <div class="grid form">
       <label class="field"><span>温度</span>
         <input type="number" id="temp" step="0.05" min="0.1" max="1.5">
@@ -116,8 +118,10 @@
       <label class="field"><span>长句分句合成</span>
         <select id="split"><option value="0">关闭（整句直出）</option><option value="1">开启（按标点分段）</option></select></label>
     </div>
+  </div>
 
-    <div class="sub">语音发送</div>
+  <div class="card">
+    <h2>语音发送 <span class="tag">聊天场景</span></h2>
     <div class="grid form">
       <label class="field"><span>自动语音</span>
         <select id="autovoice"><option value="0">关闭</option><option value="1">开启（文本回复直接转语音）</option></select></label>
@@ -127,6 +131,9 @@
       <label class="field"><span>语音最长字数</span>
         <input type="number" id="voicemax" step="10" min="1" max="200">
         <div class="hint">超过这个字数保留文字，不发语音</div></label>
+    </div>
+    <div class="sub">引擎选择</div>
+    <div class="grid form">
       <label class="field"><span>私聊语音引擎</span>
         <select id="mode-private"><option value="moss">moss-tts（克隆音色）</option><option value="edge">edge-tts（系统音色）</option></select></label>
       <label class="field"><span>群聊语音引擎</span>
@@ -141,9 +148,11 @@
           <input type="text" id="edgepitch" placeholder="+0Hz">
         </span></label>
     </div>
-    <div class="hint" data-edge-group>只有选择 edge-tts 的会话类型才会用到这三项；moss-tts 使用上面「音色库」里选中的克隆音色。</div>
+    <div class="hint" data-edge-group>只有选择 edge-tts 的会话类型才会用到这三项；moss-tts 使用「音色库」里选中的克隆音色。</div>
+  </div>
 
-    <div class="sub">运行与缓存</div>
+  <div class="card">
+    <h2>运行与缓存</h2>
     <div class="grid form">
       <label class="field"><span>合成后自动释放内存</span>
         <select id="autorelease"><option value="0">关闭（常驻，下一条更快）</option><option value="1">开启（内存更低，每条多等 5~10 秒）</option></select></label>
@@ -154,12 +163,15 @@
         <input type="number" id="tmpfiles" step="10" min="0" max="5000">
         <div class="hint">超出后按时间删最旧的</div></label>
     </div>
-
-    <div class="footer">
-      <button class="primary" id="btn-save">保存参数</button>
+    <div class="row" style="margin-top:12px">
       <button id="btn-clean-tmp">清理 tmp 缓存</button>
       <span class="hint" id="clean-info"></span>
     </div>
+  </div>
+
+  <div class="savebar">
+    <button class="primary" id="btn-save">保存参数</button>
+    <span class="hint">三个模块的参数统一保存</span>
   </div>
 
   <div class="card">
