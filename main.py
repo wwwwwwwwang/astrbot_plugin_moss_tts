@@ -70,7 +70,115 @@ class MossTTSPlugin(Star):
         self.panel = PanelAPI(self)
         self.panel.register(context)
         self._maybe_cleanup_tmp(force=True)
+        self._install_tool_guard()
         self._warm_model_async()
+
+    # ---------- 语音守卫 ----------
+    def _is_own_audio(self, path: str) -> bool:
+        """判断音频是否由本插件合成（位于插件 tmp 目录）。"""
+        try:
+            p = Path(str(path))
+            if str(path).startswith("file://"):
+                p = Path(str(path)[7:])
+            return str(p.resolve()).startswith(str(TMP_DIR.resolve()))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _install_tool_guard(self) -> None:
+        """拦截 send_message_to_user 里的外部语音，强制换成插件音色。
+
+        其他 TTS（edge-tts 等）生成的语音条不经过本插件，声音不是妖妖的。
+        这里包一层工具调用，把非插件合成的 record 用插件重新合成；
+        没有可念的文字时直接丢弃，避免发出错误音色。
+        """
+        try:
+            from astrbot.core.tools import message_tools as mt
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[moss-tts] 语音守卫安装失败: {e}")
+            return
+        cls = mt.SendMessageToUserTool
+        if getattr(cls, "_moss_voice_guard", False):
+            return
+        orig = cls.call
+        plugin = self
+
+        async def call(inner_self, context, **kwargs):
+            try:
+                error = await plugin._rewrite_foreign_records(kwargs)
+                if error:
+                    return error
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[moss-tts] 语音守卫处理失败: {e}")
+            return await orig(inner_self, context, **kwargs)
+
+        cls.call = call
+        cls._moss_voice_guard = True
+        cls._moss_voice_guard_orig = orig
+        logger.info("[moss-tts] 语音守卫已启用：外部 TTS 语音将改用插件音色")
+
+    @staticmethod
+    def _uninstall_tool_guard() -> None:
+        try:
+            from astrbot.core.tools import message_tools as mt
+        except Exception:  # noqa: BLE001
+            return
+        cls = mt.SendMessageToUserTool
+        orig = getattr(cls, "_moss_voice_guard_orig", None)
+        if getattr(cls, "_moss_voice_guard", False) and orig is not None:
+            cls.call = orig
+            cls._moss_voice_guard = False
+            cls._moss_voice_guard_orig = None
+
+    async def _rewrite_foreign_records(self, kwargs: dict) -> str | None:
+        """把工具参数里的外部语音路径替换成插件合成结果。
+
+        返回非空字符串表示需要直接作为工具结果返回（例如没有可念的文字）。
+        """
+        if not self._state.get("force_plugin_voice", True):
+            return None
+        messages = kwargs.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return None
+
+        texts = [
+            str(m.get("text", "")).strip()
+            for m in messages
+            if isinstance(m, dict) and str(m.get("type", "")).lower() == "plain"
+        ]
+        spoken = clean_for_tts(" ".join(t for t in texts if t))
+
+        new_messages = []
+        replaced = 0
+        for m in messages:
+            if not isinstance(m, dict):
+                new_messages.append(m)
+                continue
+            if str(m.get("type", "")).lower() != "record":
+                new_messages.append(m)
+                continue
+            path = m.get("path")
+            if path and self._is_own_audio(path):
+                new_messages.append(m)
+                continue
+            if not spoken:
+                replaced += 1
+                continue
+            try:
+                new_path = await self._synth(spoken)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[moss-tts] 外部语音重合成失败，已丢弃: {e}")
+                replaced += 1
+                continue
+            m = {"type": "record", "path": new_path}
+            new_messages.append(m)
+            replaced += 1
+
+        if replaced:
+            logger.info(f"[moss-tts] 拦截外部 TTS 语音 {replaced} 条，已改用插件音色或丢弃")
+        if not new_messages:
+            return "error: 语音必须使用 moss-tts 插件音色合成，请直接输出文字回复。"
+        kwargs["messages"] = new_messages
+        return None
 
     def _warm_model_async(self) -> None:
         """常驻模式下开机预热一次模型。
@@ -378,6 +486,8 @@ class MossTTSPlugin(Star):
         yield event.plain_result("看不懂这个子命令，发 /声音 看用法。")
 
     async def terminate(self):
+        # 卸载时恢复被包装的工具方法，避免影响其他插件
+        self._uninstall_tool_guard()
         # 卸载/重载时主动放掉模型，避免新旧实例各占一份内存
         try:
             MossEngine.reset()
